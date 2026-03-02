@@ -1,0 +1,251 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>Implementing an AI Personal Assistant using NanoBot and OpenIM | 后端学习手记</title><meta name="author" content="Garden"><meta name="copyright" content="Garden"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="介绍如何基于 NanoBot 与 OpenIM 搭建一个支持聊天与工具调用的 AI 个人助手，包括使用 Docker 部署 NanoBot 和 OpenIM、在后台创建机器人账号并配置 WebHooks、通过 NanoBot chat channel 接入对话和定时提醒等工具能力的完整实践流程。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Implementing an AI Personal Assistant using NanoBot and OpenIM">
+<meta property="og:url" content="https://gardenqaq.cn/2026/03/02/Implementing-an-AI-Personal-Assistant-using-NanoBot-and-OpenIM/index.html">
+<meta property="og:site_name" content="后端学习手记">
+<meta property="og:description" content="介绍如何基于 NanoBot 与 OpenIM 搭建一个支持聊天与工具调用的 AI 个人助手，包括使用 Docker 部署 NanoBot 和 OpenIM、在后台创建机器人账号并配置 WebHooks、通过 NanoBot chat channel 接入对话和定时提醒等工具能力的完整实践流程。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://gardenqaq.cn/img/post_covers/Gemini_Generated_Image_hkvx3chkvx3chkvx.png">
+<meta property="article:published_time" content="2026-03-02T08:19:03.000Z">
+<meta property="article:modified_time" content="2026-03-02T08:25:29.732Z">
+<meta property="article:author" content="Garden">
+<meta property="article:tag" content="ai">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://gardenqaq.cn/img/post_covers/Gemini_Generated_Image_hkvx3chkvx3chkvx.png"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Implementing an AI Personal Assistant using NanoBot and OpenIM",
+  "url": "https://gardenqaq.cn/2026/03/02/Implementing-an-AI-Personal-Assistant-using-NanoBot-and-OpenIM/",
+  "image": "https://gardenqaq.cn/img/post_covers/Gemini_Generated_Image_hkvx3chkvx3chkvx.png",
+  "datePublished": "2026-03-02T08:19:03.000Z",
+  "dateModified": "2026-03-02T08:25:29.732Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "Garden",
+      "url": "https://gardenqaq.cn/"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/blue-cat.png"><link rel="canonical" href="https://gardenqaq.cn/2026/03/02/Implementing-an-AI-Personal-Assistant-using-NanoBot-and-OpenIM/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: undefined,
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: true,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'Implementing an AI Personal Assistant using NanoBot and OpenIM',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 7.3.0"></head><body><div id="loading-box"><div class="loading-left-bg"></div><div class="loading-right-bg"></div><div class="spinner-box"><div class="configure-border-1"><div class="configure-core"></div></div><div class="configure-border-2"><div class="configure-core"></div></div><div class="loading-word">加载中...</div></div></div><script>(()=>{
+  const $loadingBox = document.getElementById('loading-box')
+  const $body = document.body
+  const preloader = {
+    endLoading: () => {
+      $body.style.overflow = ''
+      $loadingBox.classList.add('loaded')
+    },
+    initLoading: () => {
+      $body.style.overflow = 'hidden'
+      $loadingBox.classList.remove('loaded')
+    }
+  }
+
+  preloader.initLoading()
+  window.addEventListener('load', preloader.endLoading)
+
+  if (false) {
+    btf.addGlobalFn('pjaxSend', preloader.initLoading, 'preloader_init')
+    btf.addGlobalFn('pjaxComplete', preloader.endLoading, 'preloader_end')
+  }
+})()</script><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(/img/post_covers/Gemini_Generated_Image_hkvx3chkvx3chkvx.png);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">后端学习手记</span></a><a class="nav-page-title" href="/"><span class="site-name">Implementing an AI Personal Assistant using NanoBot and OpenIM</span></a></span><div id="menus"></div></nav><div id="post-info"><h1 class="post-title">Implementing an AI Personal Assistant using NanoBot and OpenIM</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-03-02T08:19:03.000Z" title="发表于 2026-03-02 16:19:03">2026-03-02</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-03-02T08:25:29.732Z" title="更新于 2026-03-02 16:25:29">2026-03-02</time></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><h2 id="使用NanoBot和OpenIM实现AI个人助手"><a href="#使用NanoBot和OpenIM实现AI个人助手" class="headerlink" title="使用NanoBot和OpenIM实现AI个人助手"></a>使用NanoBot和OpenIM实现AI个人助手</h2><h3 id="目标"><a href="#目标" class="headerlink" title="目标"></a>目标</h3><ul>
+<li>在 <code>OpenIM（open-im-server）</code>里实现一个“类似飞书&#x2F;企微的机器人”，并把它作为 <code>NanoBot</code> 的一个 <code>chat channel</code>，使用户在 <code>OpenIM</code> 客户端里和 <code>NanoBot</code> 对话、调用工具（比如 <code>cron</code> 定时提醒）。</li>
+</ul>
+<h3 id="实现步骤"><a href="#实现步骤" class="headerlink" title="实现步骤"></a>实现步骤</h3><ul>
+<li><p>使用 <code>docker</code>部署 <code>NanoBot</code> 服务：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># Download source code</span></span><br><span class="line">git <span class="built_in">clone</span> https://github.com/HKUDS/nanobot.git</span><br><span class="line"></span><br><span class="line"><span class="comment"># Build the image</span></span><br><span class="line">docker build -t nanobot .</span><br><span class="line"></span><br><span class="line"><span class="comment"># Initialize config (first time only)</span></span><br><span class="line">docker run -v ~/.nanobot:/root/.nanobot --<span class="built_in">rm</span> nanobot onboard</span><br><span class="line"></span><br><span class="line"><span class="comment"># Edit config on host to add API keys(如：providers.minimax.apiKey, providers.minimax.apiBase) and model(agents.default.model)</span></span><br><span class="line">vim ~/.nanobot/config.json</span><br><span class="line"></span><br><span class="line"><span class="comment"># Run gateway</span></span><br><span class="line">docker run -d --name nanobot \</span><br><span class="line">  --restart unless-stopped \</span><br><span class="line">  -v ~/.nanobot:/root/.nanobot \</span><br><span class="line">  -v /etc/localtime:/etc/localtime:ro \</span><br><span class="line">  -v /etc/timezone:/etc/timezone:ro \</span><br><span class="line">  -e TZ=Asia/Shanghai \</span><br><span class="line">  -p 18790:18790 \</span><br><span class="line">  -p 19000:19000 \</span><br><span class="line">  nanobot gateway</span><br><span class="line"></span><br><span class="line"><span class="comment"># Or run a single command</span></span><br><span class="line">docker <span class="built_in">exec</span> -it nanobot /bin/bash</span><br><span class="line">nanobot agent -m <span class="string">&quot;Hello!&quot;</span></span><br><span class="line">nanobot status</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>使用<code>docker-compose</code>部署 <code>OpenIM</code> 服务：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># Download source code</span></span><br><span class="line">git <span class="built_in">clone</span> https://github.com/openimsdk/openim-docker</span><br><span class="line"></span><br><span class="line"><span class="comment"># Set up MinIO address</span></span><br><span class="line">vim openim-docker/.env</span><br><span class="line">MINIO_EXTERNAL_ADDRESS=<span class="string">&quot;http://external_ip:10005&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># Uncomment the openim-admin-front service in docker-compose if it is commented out.</span></span><br><span class="line"><span class="comment"># vim openim-docker/docker-compose.yaml</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># Start services</span></span><br><span class="line">docker compose up -d</span><br><span class="line"></span><br><span class="line"><span class="comment"># Quick verification</span></span><br><span class="line"><span class="comment"># If you see the OpenIM login page, it means OpenIM is running successfully.</span></span><br><span class="line">curl http://your_server_ip:11001 </span><br><span class="line">curl http://your_server_ip:11002</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>使用默认管理员账号（<code>chatAdmin/chatAdmin</code>）登录 <code>OpenIM</code> 后台管理（<code>http://your_server_ip:11002</code>），创建机器人账号，记录机器人用户 <code>ID</code>：</p>
+<p><img src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="https://raw.githubusercontent.com/Garden12138/picbed-cloud/main/ai/Snipaste_2026-03-02_12-06-54.png"></p>
+<p><img src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="https://raw.githubusercontent.com/Garden12138/picbed-cloud/main/ai/Snipaste_2026-03-02_12-05-38.png"></p>
+</li>
+<li><p>开启 <code>WebHooks</code> 回调：</p>
+<ul>
+<li><p>将容器里的 <code>webhooks.yml</code> 拷贝到宿主机：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">mkdir</span> -p ./openim-config</span><br><span class="line"></span><br><span class="line">CID=$(docker compose ps -q openim-server)</span><br><span class="line">docker <span class="built_in">cp</span> <span class="string">&quot;<span class="variable">$CID</span>:/openim-server/config/webhooks.yml&quot;</span> ./openim-config/webhooks.yml</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>编辑 <code>webhooks.yml</code> 文件，设置回调地址，启用单聊并添加机器人用户 <code>ID</code>：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">url:</span> <span class="string">&quot;http://nanobot_ip:9000&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="attr">afterSendSingleMsg:</span></span><br><span class="line">  <span class="attr">enable:</span> <span class="literal">true</span></span><br><span class="line">  <span class="attr">timeout:</span> <span class="number">5</span></span><br><span class="line">  <span class="attr">failedContinue:</span> <span class="literal">true</span></span><br><span class="line">  <span class="attr">attentionIds:</span> [<span class="string">&quot;&lt;BOT_USER_ID&gt;&quot;</span>]</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>修改 <code>docker-compose.yaml</code> 文件，挂载 <code>webhooks.yml</code> 文件到 <code>openim-server</code> 容器：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">services:</span></span><br><span class="line">  <span class="attr">openim-server:</span></span><br><span class="line">    <span class="attr">volumes:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="string">./openim-config/webhooks.yml:/openim-server/config/webhooks.yml:ro</span></span><br></pre></td></tr></table></figure></li>
+</ul>
+</li>
+<li><p>添加 <code>NanoBot</code> 机器人为管理员：</p>
+<ul>
+<li><p>将容器里的 <code>share.yml</code> 拷贝到宿主机：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">mkdir</span> -p ./openim-config</span><br><span class="line"></span><br><span class="line">CID=$(docker compose ps -q openim-server)</span><br><span class="line">docker <span class="built_in">cp</span> <span class="string">&quot;<span class="variable">$CID</span>:/openim-server/config/share.yml&quot;</span> ./openim-config/share.yml</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>编辑 <code>share.yml</code> 文件，设置回调地址，添加机器人用户 <code>ID</code> 为管理员：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">imAdminUserID:</span></span><br><span class="line">  <span class="bullet">-</span> <span class="string">imAdmin</span></span><br><span class="line">  <span class="bullet">-</span> <span class="string">&quot;&lt;BOT_USER_ID&gt;&quot;</span></span><br></pre></td></tr></table></figure>
+</li>
+<li><p>修改 <code>docker-compose.yaml</code> 文件，挂载 <code>share.yml</code> 文件到 <code>openim-server</code> 容器：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">services:</span></span><br><span class="line">  <span class="attr">openim-server:</span></span><br><span class="line">    <span class="attr">volumes:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="string">./openim-config/share.yml:/openim-server/config/share.yml:ro</span></span><br></pre></td></tr></table></figure>
+</li>
+<li><p>重启 <code>openim-server</code> 容器：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">docker compose up -d --force-recreate openim-server</span><br></pre></td></tr></table></figure></li>
+</ul>
+</li>
+<li><p>实现 <code>OpenIM Channel</code>：</p>
+<ul>
+<li><p>在 <code>.nanobot/config.json</code> 文件里新增 <code>opemim channel</code> 配置：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">  <span class="attr">&quot;channels&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;openim&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">      <span class="attr">&quot;enabled&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;apiAddress&quot;</span><span class="punctuation">:</span> <span class="string">&quot;http://openim-server_ip:10002&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;adminUserId&quot;</span><span class="punctuation">:</span> <span class="string">&quot;&lt;ADMIN_USER_ID&gt;&quot;</span><span class="punctuation">,</span> # 在openim-server的share.yml的imAdminUserID中配置，默认为imAdmin</span><br><span class="line">      <span class="attr">&quot;adminSecret&quot;</span><span class="punctuation">:</span> <span class="string">&quot;&lt;ADMIN_SECRET&gt;&quot;</span><span class="punctuation">,</span> # 在openim-server的share.yml的secret中配置，默认为openIM123</span><br><span class="line">      <span class="attr">&quot;botUserId&quot;</span><span class="punctuation">:</span> <span class="string">&quot;&lt;BOT_USER_ID&gt;&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;botNickname&quot;</span><span class="punctuation">:</span> <span class="string">&quot;NanoBot&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;botPlatformId&quot;</span><span class="punctuation">:</span> <span class="number">1</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;listenHost&quot;</span><span class="punctuation">:</span> <span class="string">&quot;0.0.0.0&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;listenPort&quot;</span><span class="punctuation">:</span> <span class="number">19000</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;webhookPath&quot;</span><span class="punctuation">:</span> <span class="string">&quot;/callbackAfterSendSingleMsgCommand&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;enableReadReceipt&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span></span><br><span class="line">    <span class="punctuation">&#125;</span></span><br><span class="line">  <span class="punctuation">&#125;</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+</li>
+<li><p>在 <code>nanobot/config/schema.py</code> 文件里新增 <code>openim channel</code> 配置定义：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">OpenIMConfig</span>(<span class="title class_ inherited__">BaseModel</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;OpenIM channel configuration using webhook + REST API.&quot;&quot;&quot;</span></span><br><span class="line">    enabled: <span class="built_in">bool</span> = <span class="literal">False</span></span><br><span class="line"></span><br><span class="line">    <span class="comment"># OpenIM REST API address, e.g. http://openim-api:10002</span></span><br><span class="line">    api_address: <span class="built_in">str</span> = <span class="string">&quot;http://127.0.0.1:10002&quot;</span></span><br><span class="line"></span><br><span class="line">    <span class="comment"># Admin credential (used to get admin token, then mint bot user token)</span></span><br><span class="line">    admin_user_id: <span class="built_in">str</span> = <span class="string">&quot;imAdmin&quot;</span></span><br><span class="line">    admin_secret: <span class="built_in">str</span> = <span class="string">&quot;openIM123&quot;</span></span><br><span class="line"></span><br><span class="line">    <span class="comment"># Bot identity in OpenIM</span></span><br><span class="line">    bot_user_id: <span class="built_in">str</span> = <span class="string">&quot;&quot;</span></span><br><span class="line">    bot_nickname: <span class="built_in">str</span> = <span class="string">&quot;NanoBot&quot;</span></span><br><span class="line">    bot_platform_id: <span class="built_in">int</span> = <span class="number">1</span>  <span class="comment"># keep consistent with your OpenIM client platformID usage</span></span><br><span class="line"></span><br><span class="line">    <span class="comment"># Webhook server listen (OpenIM server will POST here)</span></span><br><span class="line">    listen_host: <span class="built_in">str</span> = <span class="string">&quot;0.0.0.0&quot;</span></span><br><span class="line">    listen_port: <span class="built_in">int</span> = <span class="number">19000</span></span><br><span class="line">    webhook_path: <span class="built_in">str</span> = <span class="string">&quot;/callbackAfterSendSingleMsgCommand&quot;</span></span><br><span class="line"></span><br><span class="line">    <span class="comment"># Read receipt / unread fix</span></span><br><span class="line">    enable_read_receipt: <span class="built_in">bool</span> = <span class="literal">True</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">ChannelsConfig</span>(<span class="title class_ inherited__">BaseModel</span>):</span><br><span class="line">    <span class="comment"># ...</span></span><br><span class="line">    openim: OpenIMConfig = Field(default_factory=OpenIMConfig)</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>在 <code>nanobot/channels/manager.py</code> 文件里新增 <code>openim channel</code> 注册：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">_init_channels</span>(<span class="params">self</span>) -&gt; <span class="literal">None</span>:</span><br><span class="line">    <span class="comment"># ...</span></span><br><span class="line">    <span class="comment"># OpenIM channel</span></span><br><span class="line">    <span class="keyword">if</span> <span class="variable language_">self</span>.config.channels.openim.enabled:</span><br><span class="line">        <span class="keyword">try</span>:</span><br><span class="line">            <span class="keyword">from</span> nanobot.channels.openim <span class="keyword">import</span> OpenIMChannel</span><br><span class="line">            <span class="variable language_">self</span>.channels[<span class="string">&quot;openim&quot;</span>] = OpenIMChannel(<span class="variable language_">self</span>.config.channels.openim, <span class="variable language_">self</span>.bus)</span><br><span class="line">            logger.info(<span class="string">&quot;OpenIM channel enabled&quot;</span>)</span><br><span class="line">        <span class="keyword">except</span> ImportError <span class="keyword">as</span> e:</span><br><span class="line">            logger.warning(<span class="string">&quot;OpenIM channel not available: &#123;&#125;&quot;</span>, e)</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>新增 <code>nanobot/channels/openim.py</code> 文件，实现 <code>OpenIM channel</code> 逻辑：</p>
+<figure class="highlight plaintext"><figcaption><span>负责 ```token``` 和 ```send/read API``` 调用</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line">  ```OpenIMChannel``` 负责启动 ```webhook server```，接收消息并转发到 ```bus```；收到 ```agent``` 输出后发送回复</span><br><span class="line"></span><br><span class="line">  具体实现参考[这里](https://github.com/Garden12138/notes/tree/master/ai/code/Implementing%20an%20AI%20Personal%20Assistant%20using%20NanoBot%20and%20OpenIM/openim.py)</span><br><span class="line"></span><br><span class="line">* 修改（覆盖） [```nanobot/agent/loop.py```](https://github.com/Garden12138/notes/tree/master/ai/code/Implementing%20an%20AI%20Personal%20Assistant%20using%20NanoBot%20and%20OpenIM/loop.py)、 [```nanobot/cron/service.py``](https://github.com/Garden12138/notes/tree/master/ai/code/Implementing%20an%20AI%20Personal%20Assistant%20using%20NanoBot%20and%20OpenIM/service.py)、[```nanobot/agent/tools/cron.py```](https://github.com/Garden12138/notes/tree/master/ai/code/Implementing%20an%20AI%20Personal%20Assistant%20using%20NanoBot%20and%20OpenIM/cron.py) 以及 [```nanobot/cli/commands.py```](https://github.com/Garden12138/notes/tree/master/ai/code/Implementing%20an%20AI%20Personal%20Assistant%20using%20NanoBot%20and%20OpenIM/commands.py) 文件，使其可以正常回复 ```openim channel``` 的消息。</span><br><span class="line"></span><br><span class="line">* 修改 ```Dockerfile```，加速构建以及暴露```webhook server 19000```端口，可参考[这里](https://github.com/Garden12138/notes/tree/master/ai/code/Implementing%20an%20AI%20Personal%20Assistant%20using%20NanoBot%20and%20OpenIM/Dockerfile)</span><br><span class="line"></span><br><span class="line">* 暂停并删除 ```NanoBot``` 容器，删除 ```NanoBot```旧镜像，重新构建镜像，再启动：</span><br><span class="line"></span><br><span class="line">  ```bash</span><br><span class="line">  docker stop nanobot &amp;&amp; docker rm nanobot &amp;&amp; docker rmi nanobot</span><br><span class="line">  docker build -t nanobot .</span><br><span class="line">  docker run -d --name nanobot \</span><br><span class="line">    --restart unless-stopped \</span><br><span class="line">    -v ~/.nanobot:/root/.nanobot \</span><br><span class="line">    -v /etc/localtime:/etc/localtime:ro \</span><br><span class="line">    -v /etc/timezone:/etc/timezone:ro \</span><br><span class="line">    -e TZ=Asia/Shanghai \</span><br><span class="line">    -p 18790:18790 \</span><br><span class="line">    -p 19000:19000 \</span><br><span class="line">    nanobot gateway</span><br></pre></td></tr></table></figure></li>
+</ul>
+</li>
+<li><p>验证功能，登录 <code>OpenIM</code> 客户端，添加机器人为好友，发送消息给机器人，机器人回复消息：</p>
+<p><img src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="https://raw.githubusercontent.com/Garden12138/picbed-cloud/main/ai/Snipaste_2026-03-02_16-13-45.png"></p>
+</li>
+</ul>
+<h3 id="参考文献"><a href="#参考文献" class="headerlink" title="参考文献"></a>参考文献</h3><ul>
+<li><a target="_blank" rel="noopener" href="https://github.com/HKUDS/nanobot">NanoBot Github</a></li>
+<li><a target="_blank" rel="noopener" href="https://docs.openim.io/zh-Hans/">OpenIM 官方稳定</a></li>
+</ul>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://gardenqaq.cn">Garden</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://gardenqaq.cn/2026/03/02/Implementing-an-AI-Personal-Assistant-using-NanoBot-and-OpenIM/">https://gardenqaq.cn/2026/03/02/Implementing-an-AI-Personal-Assistant-using-NanoBot-and-OpenIM/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://gardenqaq.cn" target="_blank">后端学习手记</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/ai/">ai</a></div><div class="post-share"><div class="social-share" data-image="/img/post_covers/Gemini_Generated_Image_hkvx3chkvx3chkvx.png" data-sites="facebook,twitter,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related full-width" href="/2026/02/12/Using-vLLM-deploy-GLM-OCR/" title="Using vLLM deploy GLM OCR"><div class="cover" style="background: /img/post_covers/Gemini_Generated_Image_nc24q6nc24q6nc24"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">Using vLLM deploy GLM OCR</div></div><div class="info-2"><div class="info-item-1">使用 vLLM Docker 部署 GLM-OCR 目标：在单卡服务器上，通过 Docker 启动 vLLM 的 OpenAI 兼容服务，加载 ZhipuAI/GLM-OCR，支持读取本地挂载目录里的图片（file:///media/...）并输出严格 JSON，方便你直接解析字段。结论：当前链路下 PDF 不能直接作为 image 输入，需要先 PDF → 图片 再 OCR。   目录 1. 前置条件 2. 目录规划 3. （推荐）宿主机预下载模型：ModelScope download 4. 一键启动 vLLM + GLM-OCR（Docker） 5. 启动验证与常用检查命令 6. PDF 转图片 7. 调用接口：发票 OCR 并严格输出 JSON 8. 结果解析：如何取每个字段 9. 常见报错与一行修复 10. 可选优化   1. 前置条件1.1 GPU &#x2F; 驱动 &#x2F; Docker确保以下命令正常： 12nvidia-smidocker version  同时需要 NVIDIA Container Toolkit（保证容器能用 GPU）。  2....</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2025/11/03/AI-video-face-swapping-implementation-methods/" title="AI video face-swapping implementation methods.md"><img class="cover" src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/img/post_covers/Google_AI_Studio_2025-11-03T06_39_30.260Z.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-11-03</div><div class="info-item-2">AI video face-swapping implementation methods.md</div></div><div class="info-2"><div class="info-item-1">调研基于 Wan2.2-Animate 的视频换脸实现方式，覆盖 HuggingFace、ModelScope、Wan 平台、ComfyUI（在线/本地）流程、优缺点与关键模型配置。</div></div></div></a><a class="pagination-related" href="/2025/10/15/BPE-algorithm-analysis/" title="BPE algorithm analysis"><img class="cover" src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/img/post_covers/ChatGPT_Image_20251015.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-10-15</div><div class="info-item-2">BPE algorithm analysis</div></div><div class="info-2"><div class="info-item-1">深入解析BPE（Byte Pair Encoding）算法的工作原理，包括训练流程和应用流程，通过迭代合并高频字符对来构建词汇表，有效解决NLP中的罕见词问题。</div></div></div></a><a class="pagination-related" href="/2025/10/16/Business-license-OCR-implementation/" title="Business license OCR implementation"><img class="cover" src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/img/post_covers/ChatGPT_Image_20251016.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-10-16</div><div class="info-item-2">Business license OCR implementation</div></div><div class="info-2"><div class="info-item-1">基于FastAPI框架实现营业执照OCR识别系统，集成读光票证检测矫正模型和Nanonets-OCR-s模型，自动识别营业执照中的统一社会信用代码、名称、法定代表人、住所等关键信息。</div></div></div></a><a class="pagination-related" href="/2025/06/30/DB-GPT-usage/" title="DB-GPT usage"><img class="cover" src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/img/post_covers/133049767_p2.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-06-30</div><div class="info-item-2">DB-GPT usage</div></div><div class="info-2"><div class="info-item-1">DB-GPT是一个开源的AI原生数据应用开发框架，目的是构建大模型领域的基础设施，通过开发多模型管理(SMMF)、Text2SQL效果优化、RAG框架以及优化、Multi-Agents框架协作、AWEL(智能体工作流编排)等多种技术能力，让围绕数据库构建大模型应用更简单，更方便。</div></div></div></a><a class="pagination-related" href="/2026/01/29/Deploying-Step3-VL-10B-using-vLLM-multi-GPU-inference/" title="Deploying Step3-VL-10B using vLLM multi-GPU inference"><img class="cover" src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/img/post_covers/Gemini_Generated_Image_v8zw8jv8zw8jv8zw.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-01-29</div><div class="info-item-2">Deploying Step3-VL-10B using vLLM multi-GPU inference</div></div><div class="info-2"><div class="info-item-1">介绍在 Ubuntu 22.04 + 多张 22GB GPU 服务器上，通过 vLLM OpenAI API Server 部署 Step3-VL-10B 模型的完整流程，包括 NVIDIA 驱动与 CUDA 配置、Docker GPU 环境搭建、ModelScope 模型缓存、vLLM 多卡 Tensor Parallel 启动参数以及接入 dify 工作流的实战案例。</div></div></div></a><a class="pagination-related" href="/2025/07/15/Download-model/" title="Download model"><img class="cover" src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/img/post_covers/133049767_p1.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-07-15</div><div class="info-item-2">Download model</div></div><div class="info-2"><div class="info-item-1">下载模型，使开发者可在本地环境微调或运行推理模型。</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/img/saber.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">Garden</div><div class="author-info-description"></div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">36</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">16</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">0</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/Garden12138"><i class="fab fa-github"></i><span>Follow Me</span></a></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">This is Garden's Blog</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8NanoBot%E5%92%8COpenIM%E5%AE%9E%E7%8E%B0AI%E4%B8%AA%E4%BA%BA%E5%8A%A9%E6%89%8B"><span class="toc-number">1.</span> <span class="toc-text">使用NanoBot和OpenIM实现AI个人助手</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%9B%AE%E6%A0%87"><span class="toc-number">1.1.</span> <span class="toc-text">目标</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%9E%E7%8E%B0%E6%AD%A5%E9%AA%A4"><span class="toc-number">1.2.</span> <span class="toc-text">实现步骤</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%82%E8%80%83%E6%96%87%E7%8C%AE"><span class="toc-number">1.3.</span> <span class="toc-text">参考文献</span></a></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/2026/03/02/Implementing-an-AI-Personal-Assistant-using-NanoBot-and-OpenIM/" title="Implementing an AI Personal Assistant using NanoBot and OpenIM"><img src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/img/post_covers/Gemini_Generated_Image_hkvx3chkvx3chkvx.png" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Implementing an AI Personal Assistant using NanoBot and OpenIM"/></a><div class="content"><a class="title" href="/2026/03/02/Implementing-an-AI-Personal-Assistant-using-NanoBot-and-OpenIM/" title="Implementing an AI Personal Assistant using NanoBot and OpenIM">Implementing an AI Personal Assistant using NanoBot and OpenIM</a><time datetime="2026-03-02T08:19:03.000Z" title="发表于 2026-03-02 16:19:03">2026-03-02</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/02/12/Using-vLLM-deploy-GLM-OCR/" title="Using vLLM deploy GLM OCR"><div style="background: /img/post_covers/Gemini_Generated_Image_nc24q6nc24q6nc24"></div></a><div class="content"><a class="title" href="/2026/02/12/Using-vLLM-deploy-GLM-OCR/" title="Using vLLM deploy GLM OCR">Using vLLM deploy GLM OCR</a><time datetime="2026-02-12T07:36:22.000Z" title="发表于 2026-02-12 15:36:22">2026-02-12</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/02/10/Using-the-dify-subworkflow/" title="Using the dify subworkflow"><img src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/img/post_covers/Gemini_Generated_Image_23xz5423xz5423xz.png" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Using the dify subworkflow"/></a><div class="content"><a class="title" href="/2026/02/10/Using-the-dify-subworkflow/" title="Using the dify subworkflow">Using the dify subworkflow</a><time datetime="2026-02-10T02:28:15.000Z" title="发表于 2026-02-10 10:28:15">2026-02-10</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/01/29/Deploying-Step3-VL-10B-using-vLLM-multi-GPU-inference/" title="Deploying Step3-VL-10B using vLLM multi-GPU inference"><img src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/img/post_covers/Gemini_Generated_Image_v8zw8jv8zw8jv8zw.png" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Deploying Step3-VL-10B using vLLM multi-GPU inference"/></a><div class="content"><a class="title" href="/2026/01/29/Deploying-Step3-VL-10B-using-vLLM-multi-GPU-inference/" title="Deploying Step3-VL-10B using vLLM multi-GPU inference">Deploying Step3-VL-10B using vLLM multi-GPU inference</a><time datetime="2026-01-29T06:40:30.000Z" title="发表于 2026-01-29 14:40:30">2026-01-29</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2025/12/31/Running-the-Funasr-Nano-2512-model-locally/" title="Running the Funasr-Nano-2512 model locally"><img src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/img/post_covers/Gemini_Generated_Image_ny0gpvny0gpvny0g.png" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Running the Funasr-Nano-2512 model locally"/></a><div class="content"><a class="title" href="/2025/12/31/Running-the-Funasr-Nano-2512-model-locally/" title="Running the Funasr-Nano-2512 model locally">Running the Funasr-Nano-2512 model locally</a><time datetime="2025-12-31T02:04:26.000Z" title="发表于 2025-12-31 10:04:26">2025-12-31</time></div></div></div></div></div></div></main><footer id="footer" style="background-image: url(/img/post_covers/Gemini_Generated_Image_hkvx3chkvx3chkvx.png);"><div id="footer-wrap"><div class="copyright">&copy;2019 - 2026 By Garden</div><div class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 7.3.0</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.3.5</a></div><div class="footer_custom_text"><a href="https://beian.miit.gov.cn" target="_blank" rel="noopener noreferrer">粤ICP备2025394033号</a></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js"></script><script src="/js/main.js"></script><script src="https://cdn.jsdelivr.net/npm/instant.page/instantpage.min.js" type="module"></script><script src="https://cdn.jsdelivr.net/npm/vanilla-lazyload/dist/lazyload.iife.min.js"></script><div class="js-pjax"></div><canvas class="fireworks" mobile="false"></canvas><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/fireworks.min.js"></script><script defer="defer" id="fluttering_ribbon" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/canvas-fluttering-ribbon.min.js"></script><script id="canvas_nest" defer="defer" color="0,0,255" opacity="0.7" zIndex="-1" count="99" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/canvas-nest.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/activate-power-mode.min.js"></script><script>POWERMODE.colorful = true;
+POWERMODE.shake = true;
+POWERMODE.mobile = false;
+document.body.addEventListener('input', POWERMODE);
+</script><script id="click-heart" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/click-heart.min.js" async="async" mobile="false"></script><script id="click-show-text" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/click-show-text.min.js" data-mobile="false" data-text="I,LOVE,YOU" data-fontsize="15px" data-random="false" async="async"></script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>
