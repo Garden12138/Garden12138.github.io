@@ -1,0 +1,835 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>Deploying Qwen-Image-2.1-Turbo on a single RTX 2080 Ti | Garden Blog</title><meta name="author" content="Garden"><meta name="copyright" content="Garden"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="介绍如何在单张 RTX 2080 Ti 22GB 的 Ubuntu 服务器上，基于 GGUF 量化模型和 stable-diffusion.cpp 部署 Qwen-Image-2.1-Turbo，覆盖 CUDA 编译、ModelScope 模型下载、sd-server 启动、Web 工作台的文生图&#x2F;整图编辑&#x2F;局部涂抹编辑，以及供 Agent 调用的 OpenAI Images API 兼容接口和常">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Deploying Qwen-Image-2.1-Turbo on a single RTX 2080 Ti">
+<meta property="og:url" content="https://gardenqaq.cn/2026/11/23/Deploying-Qwen-Image-2.1-Turbo-on-a-single-RTX-2080-Ti/index.html">
+<meta property="og:site_name" content="Garden Blog">
+<meta property="og:description" content="介绍如何在单张 RTX 2080 Ti 22GB 的 Ubuntu 服务器上，基于 GGUF 量化模型和 stable-diffusion.cpp 部署 Qwen-Image-2.1-Turbo，覆盖 CUDA 编译、ModelScope 模型下载、sd-server 启动、Web 工作台的文生图&#x2F;整图编辑&#x2F;局部涂抹编辑，以及供 Agent 调用的 OpenAI Images API 兼容接口和常">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://gardenqaq.cn/img/post_covers/saber-20261123.jpg">
+<meta property="article:published_time" content="2026-11-23T08:40:00.000Z">
+<meta property="article:modified_time" content="2026-11-23T08:53:42.215Z">
+<meta property="article:author" content="Garden">
+<meta property="article:tag" content="ai">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://gardenqaq.cn/img/post_covers/saber-20261123.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Deploying Qwen-Image-2.1-Turbo on a single RTX 2080 Ti",
+  "url": "https://gardenqaq.cn/2026/11/23/Deploying-Qwen-Image-2.1-Turbo-on-a-single-RTX-2080-Ti/",
+  "image": "https://gardenqaq.cn/img/post_covers/saber-20261123.jpg",
+  "datePublished": "2026-11-23T08:40:00.000Z",
+  "dateModified": "2026-11-23T08:53:42.215Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "Garden",
+      "url": "https://gardenqaq.cn/"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/blue-cat.png"><link rel="canonical" href="https://gardenqaq.cn/2026/11/23/Deploying-Qwen-Image-2.1-Turbo-on-a-single-RTX-2080-Ti/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: undefined,
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: true,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'Deploying Qwen-Image-2.1-Turbo on a single RTX 2080 Ti',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 7.3.0"></head><body><div id="loading-box"><div class="loading-left-bg"></div><div class="loading-right-bg"></div><div class="spinner-box"><div class="configure-border-1"><div class="configure-core"></div></div><div class="configure-border-2"><div class="configure-core"></div></div><div class="loading-word">加载中...</div></div></div><script>(()=>{
+  const $loadingBox = document.getElementById('loading-box')
+  const $body = document.body
+  const preloader = {
+    endLoading: () => {
+      $body.style.overflow = ''
+      $loadingBox.classList.add('loaded')
+    },
+    initLoading: () => {
+      $body.style.overflow = 'hidden'
+      $loadingBox.classList.remove('loaded')
+    }
+  }
+
+  preloader.initLoading()
+  window.addEventListener('load', preloader.endLoading)
+
+  if (false) {
+    btf.addGlobalFn('pjaxSend', preloader.initLoading, 'preloader_init')
+    btf.addGlobalFn('pjaxComplete', preloader.endLoading, 'preloader_end')
+  }
+})()</script><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(/img/post_covers/saber-20261123.jpg);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">Garden Blog</span></a><a class="nav-page-title" href="/"><span class="site-name">Deploying Qwen-Image-2.1-Turbo on a single RTX 2080 Ti</span></a></span><div id="menus"></div></nav><div id="post-info"><h1 class="post-title">Deploying Qwen-Image-2.1-Turbo on a single RTX 2080 Ti</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-11-23T08:40:00.000Z" title="发表于 2026-11-23 16:40:00">2026-11-23</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-11-23T08:53:42.215Z" title="更新于 2026-11-23 16:53:42">2026-11-23</time></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><h2 id="使用单张-RTX-2080-Ti-部署-Qwen-Image-2-1-Turbo-本地生图服务"><a href="#使用单张-RTX-2080-Ti-部署-Qwen-Image-2-1-Turbo-本地生图服务" class="headerlink" title="使用单张 RTX 2080 Ti 部署 Qwen-Image-2.1-Turbo 本地生图服务"></a>使用单张 RTX 2080 Ti 部署 Qwen-Image-2.1-Turbo 本地生图服务</h2><h3 id="目标"><a href="#目标" class="headerlink" title="目标"></a>目标</h3><ul>
+<li><p>在一台 Ubuntu 服务器（单张 RTX 2080 Ti 22GB）上本地运行 <code>Qwen-Image-2.1-Turbo</code>，实现三种能力：</p>
+<ul>
+<li><strong>文生图</strong>：输入提示词生成图片。</li>
+<li><strong>整图编辑</strong>：上传一张图片，用文字描述要修改的内容。</li>
+<li><strong>局部涂抹编辑</strong>：在图片上涂出要修改的区域，只修改这一部分。</li>
+</ul>
+</li>
+<li><p>提供两种使用方式：</p>
+<ul>
+<li>浏览器打开 Web 工作台直接使用。</li>
+<li>通过兼容 OpenAI Images API 的接口，供 Python 程序或 AI Agent 调用。</li>
+</ul>
+</li>
+</ul>
+<h3 id="方案说明"><a href="#方案说明" class="headerlink" title="方案说明"></a>方案说明</h3><p>22GB 显存放不下完整精度的模型，因此采用以下组合：</p>
+<ul>
+<li><strong>模型</strong>：Qwen-Image-2.1-Turbo 的 <code>Q4_K_M</code> GGUF 量化版本。量化后体积和显存占用大幅降低，Turbo 版本只需 8 步采样，速度较快。</li>
+<li><strong>推理引擎</strong>：<a target="_blank" rel="noopener" href="https://github.com/leejet/stable-diffusion.cpp">stable-diffusion.cpp</a>，一个 C&#x2F;C++ 实现的扩散模型推理引擎，支持 GGUF 和 CUDA，并自带 HTTP 服务程序 <code>sd-server</code>。</li>
+<li><strong>服务层</strong>：用 FastAPI 编写一个工作台网关，负责参数校验、任务排队和提供网页；再编写一个适配层，把接口包装成 OpenAI Images API 格式。</li>
+</ul>
+<p>最终由三个进程组成，调用关系如下：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">浏览器 ─────────────────────────────┐</span><br><span class="line">                                    ▼</span><br><span class="line">Agent / OpenAI SDK ──► 适配层 :8001 ──► 工作台 :8000 ──► sd-server :1234 ──► 模型 + GPU</span><br></pre></td></tr></table></figure>
+
+<table>
+<thead>
+<tr>
+<th>进程</th>
+<th>监听地址</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sd-server</code></td>
+<td><code>127.0.0.1:1234</code></td>
+<td>加载模型并执行推理，只允许本机访问</td>
+</tr>
+<tr>
+<td>工作台 <code>qwen_image_gateway.py</code></td>
+<td><code>0.0.0.0:8000</code></td>
+<td>提供网页和生成、编辑接口，同一时间只执行一个任务，<strong>不鉴权</strong></td>
+</tr>
+<tr>
+<td>适配层 <code>openai_compat_gateway.py</code></td>
+<td><code>0.0.0.0:8001</code></td>
+<td>OpenAI Images API 兼容接口，使用 Bearer Token 鉴权</td>
+</tr>
+</tbody></table>
+<p>建议按 <strong>命令行生图 → sd-server → Web 工作台 → API 适配层</strong> 的顺序逐层搭建，每层验证通过后再进行下一层，出问题时容易判断是哪一层的原因。</p>
+<h3 id="环境"><a href="#环境" class="headerlink" title="环境"></a>环境</h3><table>
+<thead>
+<tr>
+<th>项目</th>
+<th>版本</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>操作系统</td>
+<td>Ubuntu 24.04.2 LTS</td>
+</tr>
+<tr>
+<td>GPU</td>
+<td>1 × NVIDIA GeForce RTX 2080 Ti 22GB（魔改扩容卡），计算能力 7.5（<code>sm_75</code>）</td>
+</tr>
+<tr>
+<td>NVIDIA 驱动</td>
+<td>550.120</td>
+</tr>
+<tr>
+<td>CUDA Toolkit</td>
+<td>12.4（安装在 Conda 环境内）</td>
+</tr>
+<tr>
+<td>Python</td>
+<td>3.11</td>
+</tr>
+<tr>
+<td>CMake &#x2F; Ninja</td>
+<td>4.x &#x2F; 1.x</td>
+</tr>
+<tr>
+<td>stable-diffusion.cpp</td>
+<td>提交 <code>b13a482</code></td>
+</tr>
+<tr>
+<td>模型</td>
+<td>Qwen-Image-2.1-Turbo <code>Q4_K_M</code> GGUF</td>
+</tr>
+</tbody></table>
+<ul>
+<li><p>先检查机器状态：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">nvidia-smi</span><br><span class="line">nvcc --version || <span class="literal">true</span></span><br><span class="line">free -h</span><br><span class="line"><span class="built_in">df</span> -h</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p><code>nvidia-smi</code> 显示的 <code>CUDA Version: 12.4</code> 只表示驱动最高支持到 CUDA 12.4，不代表已经安装了 CUDA 编译器 <code>nvcc</code>。编译 stable-diffusion.cpp 需要另外安装 CUDA Toolkit。</p>
+</blockquote>
+</li>
+<li><p>如果同一张显卡上还运行着其他模型服务，建议先停掉。部署过程中曾因同时运行 Embedding 服务，在生成 1024×1024 图片时导致整机卡死。</p>
+</li>
+</ul>
+<h3 id="准备目录和-Python-环境"><a href="#准备目录和-Python-环境" class="headerlink" title="准备目录和 Python 环境"></a>准备目录和 Python 环境</h3><ul>
+<li><p>目录规划如下。配套脚本中写死了 <code>/mnt/data/ai-inference</code> 路径，建议直接沿用；如果更换目录，需要同步修改脚本中的路径。</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">/mnt/data/ai-inference/</span><br><span class="line">├── stable-diffusion.cpp/              # 推理引擎源码，编译产物在 build/bin/</span><br><span class="line">├── models/qwen-image21-turbo/</span><br><span class="line">│   ├── diffusion/                     # 扩散主模型</span><br><span class="line">│   ├── text_encoder/                  # 文本编码器和视觉投影</span><br><span class="line">│   └── vae/                           # VAE</span><br><span class="line">├── scripts/                           # 启动脚本、工作台、适配层</span><br><span class="line">├── web/index.html                     # 工作台网页</span><br><span class="line">├── run-openai-compat.sh               # 适配层启动脚本</span><br><span class="line">└── .env.openai-image                  # API Key 等私密配置，不要公开</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>创建目录和 Conda 环境：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">mkdir</span> -p /mnt/data/ai-inference/&#123;scripts,web,models/qwen-image21-turbo&#125;</span><br><span class="line">conda create -n qwen-image21 python=3.11 cmake ninja -c conda-forge -y</span><br><span class="line">conda activate qwen-image21</span><br></pre></td></tr></table></figure>
+
+<p>如果访问 conda-forge 较慢，先配置国内 Conda 镜像。</p>
+</li>
+<li><p>在 Conda 环境中安装 CUDA Toolkit 12.4：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">conda install -c nvidia/label/cuda-12.4.1 <span class="string">&quot;cuda-toolkit=12.4&quot;</span> -y</span><br><span class="line"><span class="built_in">which</span> nvcc</span><br><span class="line">nvcc --version</span><br></pre></td></tr></table></figure>
+
+<p>也可以使用系统级 CUDA Toolkit，但不要混用多个版本的 <code>nvcc</code> 和 CUDA 库。后续命令都默认已执行 <code>conda activate qwen-image21</code>。</p>
+</li>
+</ul>
+<h3 id="编译-stable-diffusion-cpp"><a href="#编译-stable-diffusion-cpp" class="headerlink" title="编译 stable-diffusion.cpp"></a>编译 stable-diffusion.cpp</h3><ul>
+<li><p>固定使用提交 <code>b13a482</code>。stable-diffusion.cpp 的 <code>master</code> 分支更新频繁，编译选项和参数可能变化，使用同一版本更容易复现。</p>
+</li>
+<li><p>服务器可以访问 GitHub 时，直接在服务器上获取源码：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">cd</span> /mnt/data/ai-inference</span><br><span class="line">git <span class="built_in">clone</span> https://github.com/leejet/stable-diffusion.cpp.git</span><br><span class="line"><span class="built_in">cd</span> stable-diffusion.cpp</span><br><span class="line">git checkout b13a482</span><br><span class="line">git submodule update --init --recursive</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>服务器无法访问 GitHub 时，在能上网的 Mac 上下载并打包，再上传到服务器：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># Mac 上执行</span></span><br><span class="line">git <span class="built_in">clone</span> https://github.com/leejet/stable-diffusion.cpp.git</span><br><span class="line"><span class="built_in">cd</span> stable-diffusion.cpp</span><br><span class="line">git checkout b13a482</span><br><span class="line">git submodule update --init --recursive</span><br><span class="line"><span class="built_in">cd</span> ..</span><br><span class="line"></span><br><span class="line"><span class="comment"># COPYFILE_DISABLE=1 和 --exclude 用于排除 macOS 元数据文件</span></span><br><span class="line">COPYFILE_DISABLE=1 tar \</span><br><span class="line">  --exclude=<span class="string">&#x27;.git&#x27;</span> \</span><br><span class="line">  --exclude=<span class="string">&#x27;._*&#x27;</span> \</span><br><span class="line">  --exclude=<span class="string">&#x27;.DS_Store&#x27;</span> \</span><br><span class="line">  -czf stable-diffusion.cpp-b13a482.tar.gz stable-diffusion.cpp</span><br><span class="line"></span><br><span class="line">scp stable-diffusion.cpp-b13a482.tar.gz &lt;SSH_USER&gt;@&lt;SERVER_IP&gt;:/mnt/data/ai-inference/</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 服务器上执行</span></span><br><span class="line"><span class="built_in">cd</span> /mnt/data/ai-inference</span><br><span class="line">tar -xzf stable-diffusion.cpp-b13a482.tar.gz</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>子模块（<code>git submodule</code>）必须下载完整，否则编译时会缺少头文件或 CMake 项目。</p>
+</blockquote>
+</li>
+<li><p><strong>踩坑：编译报 <code>._add-id.cu</code> 错误</strong></p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Building CUDA object ... /._add-id.cu.o</span><br><span class="line">.../ggml-cuda/._add-id.cu:1:1: warning: null character(s) ignored</span><br><span class="line">... Mac OS X ... com.apple.provenance ...</span><br></pre></td></tr></table></figure>
+
+<p>原因不是 CUDA 环境有问题，而是从 Mac 打包时带上了 <code>._*</code> 元数据文件，CMake 把 <code>._add-id.cu</code> 当成 CUDA 源码去编译。进入源码目录清理后重新编译即可：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">cd</span> /mnt/data/ai-inference/stable-diffusion.cpp</span><br><span class="line">find . -<span class="built_in">type</span> f -name <span class="string">&#x27;._*&#x27;</span> -<span class="built_in">print</span> -delete</span><br><span class="line">find . -<span class="built_in">type</span> f -name <span class="string">&#x27;.DS_Store&#x27;</span> -<span class="built_in">print</span> -delete</span><br><span class="line">find . -<span class="built_in">type</span> d -name <span class="string">&#x27;__MACOSX&#x27;</span> -prune -<span class="built_in">exec</span> <span class="built_in">rm</span> -rf &#123;&#125; +</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>开启 CUDA 编译。RTX 2080 Ti 是 Turing 架构，计算能力 7.5，所以 <code>CMAKE_CUDA_ARCHITECTURES</code> 设为 <code>75</code>：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">cd</span> /mnt/data/ai-inference/stable-diffusion.cpp</span><br><span class="line"></span><br><span class="line">cmake -S . -B build -G Ninja \</span><br><span class="line">  -DCMAKE_BUILD_TYPE=Release \</span><br><span class="line">  -DSD_CUDA=ON \</span><br><span class="line">  -DSD_BUILD_EXAMPLES=ON \</span><br><span class="line">  -DCMAKE_CUDA_ARCHITECTURES=75</span><br><span class="line"></span><br><span class="line">cmake --build build -j 4</span><br></pre></td></tr></table></figure>
+
+<p>编译过程中出现的 warning 可以忽略，只要最后链接成功即可。并行数 <code>-j</code> 不宜设置过大，避免内存不足。</p>
+</li>
+<li><p>验证编译结果：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">ls</span> -lh build/bin/sd-cli build/bin/sd-server</span><br><span class="line">./build/bin/sd-cli --<span class="built_in">help</span> | <span class="built_in">head</span> -n 20</span><br></pre></td></tr></table></figure>
+
+<p><code>sd-cli</code>（命令行生图工具）和 <code>sd-server</code>（HTTP 服务）都存在，并且帮助信息中显示 <code>commit b13a482</code>，说明编译成功。</p>
+</li>
+</ul>
+<h3 id="下载模型"><a href="#下载模型" class="headerlink" title="下载模型"></a>下载模型</h3><ul>
+<li><p>Qwen-Image-2.1-Turbo 需要 4 个文件，只下载一个 <code>.gguf</code> 是不够的：</p>
+<table>
+<thead>
+<tr>
+<th>组件</th>
+<th>文件名</th>
+<th>作用</th>
+<th>存放目录</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>扩散主模型</td>
+<td><code>qwen-image-2.1-turbo-Q4_K_M.gguf</code></td>
+<td>生成图片</td>
+<td><code>diffusion/</code></td>
+</tr>
+<tr>
+<td>文本编码器</td>
+<td><code>Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf</code></td>
+<td>理解提示词</td>
+<td><code>text_encoder/</code></td>
+</tr>
+<tr>
+<td>视觉投影</td>
+<td><code>mmproj-Qwen3VL-8B-Instruct-F16.gguf</code></td>
+<td>理解参考图，图片编辑需要</td>
+<td><code>text_encoder/</code></td>
+</tr>
+<tr>
+<td>VAE</td>
+<td><code>qwen_image_2.1_vae_bf16.safetensors</code></td>
+<td>图像编码和解码</td>
+<td><code>vae/</code></td>
+</tr>
+</tbody></table>
+</li>
+<li><p>使用 ModelScope 下载前三个文件：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">python -m pip install -U modelscope -i https://pypi.tuna.tsinghua.edu.cn/simple</span><br><span class="line"></span><br><span class="line">ROOT=/mnt/data/ai-inference/models/qwen-image21-turbo</span><br><span class="line"><span class="built_in">mkdir</span> -p <span class="string">&quot;<span class="variable">$ROOT</span>&quot;</span>/&#123;diffusion,text_encoder,vae&#125;</span><br><span class="line"></span><br><span class="line">modelscope download \</span><br><span class="line">  --model unsloth/Qwen-Image-2.1-Turbo-GGUF \</span><br><span class="line">  --include <span class="string">&#x27;qwen-image-2.1-turbo-Q4_K_M.gguf&#x27;</span> \</span><br><span class="line">  --local_dir <span class="string">&quot;<span class="variable">$ROOT</span>/diffusion&quot;</span></span><br><span class="line"></span><br><span class="line">modelscope download \</span><br><span class="line">  --model unsloth/Qwen3-VL-8B-Instruct-GGUF \</span><br><span class="line">  --include <span class="string">&#x27;Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf&#x27;</span> <span class="string">&#x27;mmproj-Qwen3VL-8B-Instruct-F16.gguf&#x27;</span> \</span><br><span class="line">  --local_dir <span class="string">&quot;<span class="variable">$ROOT</span>/text_encoder&quot;</span></span><br></pre></td></tr></table></figure>
+</li>
+<li><p>VAE 来自 <a target="_blank" rel="noopener" href="https://huggingface.co/Comfy-Org/Qwen-Image-2.1/blob/main/vae/qwen_image_2.1_vae_bf16.safetensors">Comfy-Org&#x2F;Qwen-Image-2.1</a>。如果 ModelScope 上有对应镜像可以直接下载，否则在能访问 Hugging Face 的电脑上下载后用 <code>scp</code> 上传，最终放到：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">/mnt/data/ai-inference/models/qwen-image21-turbo/vae/qwen_image_2.1_vae_bf16.safetensors</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>检查 4 个文件是否就位：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ROOT=/mnt/data/ai-inference/models/qwen-image21-turbo</span><br><span class="line">find <span class="string">&quot;<span class="variable">$ROOT</span>&quot;</span> -<span class="built_in">type</span> f \( -name <span class="string">&#x27;*.gguf&#x27;</span> -o -name <span class="string">&#x27;*.safetensors&#x27;</span> \) -<span class="built_in">printf</span> <span class="string">&#x27;%P\t%k KB\n&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<p>如果后续脚本提示找不到模型文件，先检查下载后是否多嵌套了一层目录。</p>
+</li>
+</ul>
+<h3 id="使用命令行测试生图"><a href="#使用命令行测试生图" class="headerlink" title="使用命令行测试生图"></a>使用命令行测试生图</h3><ul>
+<li><p>在启动任何服务之前，先用 <code>sd-cli</code> 生成一张图片，确认模型本身可以正常运行：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">ROOT=/mnt/data/ai-inference/models/qwen-image21-turbo</span><br><span class="line">BIN=/mnt/data/ai-inference/stable-diffusion.cpp/build/bin/sd-cli</span><br><span class="line"></span><br><span class="line">CUDA_VISIBLE_DEVICES=0 <span class="string">&quot;<span class="variable">$BIN</span>&quot;</span> \</span><br><span class="line">  --diffusion-model <span class="string">&quot;<span class="variable">$ROOT</span>/diffusion/qwen-image-2.1-turbo-Q4_K_M.gguf&quot;</span> \</span><br><span class="line">  --llm <span class="string">&quot;<span class="variable">$ROOT</span>/text_encoder/Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf&quot;</span> \</span><br><span class="line">  --llm_vision <span class="string">&quot;<span class="variable">$ROOT</span>/text_encoder/mmproj-Qwen3VL-8B-Instruct-F16.gguf&quot;</span> \</span><br><span class="line">  --vae <span class="string">&quot;<span class="variable">$ROOT</span>/vae/qwen_image_2.1_vae_bf16.safetensors&quot;</span> \</span><br><span class="line">  --offload-to-cpu \</span><br><span class="line">  --max-vram cuda0=12 \</span><br><span class="line">  --cfg-scale 1.0 \</span><br><span class="line">  --steps 8 \</span><br><span class="line">  --sampling-method euler \</span><br><span class="line">  --sigmas qwen-image-2.1-turbo \</span><br><span class="line">  -W 768 -H 768 \</span><br><span class="line">  -p <span class="string">&#x27;A cute orange cat sitting on a windowsill, photorealistic&#x27;</span> \</span><br><span class="line">  -o /mnt/data/ai-inference/cat-768.png</span><br></pre></td></tr></table></figure>
+
+<p>成功生成 768×768 的图片，单次耗时约 19 秒（与提示词和机器负载有关，仅供参考）。</p>
+</li>
+<li><p>关键参数说明：</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>--offload-to-cpu</code></td>
+<td>允许把部分权重放到内存，降低显存压力</td>
+</tr>
+<tr>
+<td><code>--max-vram cuda0=12</code></td>
+<td>显存使用预算（GB），不是绝对上限，峰值仍可能超过</td>
+</tr>
+<tr>
+<td><code>--steps 8</code>、<code>--sigmas qwen-image-2.1-turbo</code></td>
+<td>匹配 Turbo 模型的 8 步采样</td>
+</tr>
+<tr>
+<td><code>--cfg-scale 1.0</code></td>
+<td>Turbo 模型使用 1.0</td>
+</tr>
+<tr>
+<td><code>--llm_vision</code></td>
+<td>加载视觉投影，文生图用不到，图片编辑必须加载</td>
+</tr>
+<tr>
+<td><code>-W 768 -H 768</code></td>
+<td>输出尺寸，建议先用 768×768</td>
+</tr>
+</tbody></table>
+</li>
+</ul>
+<h3 id="启动-sd-server"><a href="#启动-sd-server" class="headerlink" title="启动 sd-server"></a>启动 sd-server</h3><ul>
+<li><p>新建启动脚本 <code>/mnt/data/ai-inference/scripts/run-qwen-image21-server.sh</code>（配套源码中已包含）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#!/usr/bin/env bash</span></span><br><span class="line"><span class="built_in">set</span> -euo pipefail</span><br><span class="line"></span><br><span class="line"><span class="built_in">export</span> CUDA_VISIBLE_DEVICES=0</span><br><span class="line"><span class="built_in">export</span> MODEL_ROOT=/mnt/data/ai-inference/models/qwen-image21-turbo</span><br><span class="line"></span><br><span class="line"><span class="built_in">exec</span> /mnt/data/ai-inference/stable-diffusion.cpp/build/bin/sd-server \</span><br><span class="line">  --listen-ip 127.0.0.1 \</span><br><span class="line">  --listen-port 1234 \</span><br><span class="line">  --diffusion-model <span class="string">&quot;<span class="variable">$MODEL_ROOT</span>/diffusion/qwen-image-2.1-turbo-Q4_K_M.gguf&quot;</span> \</span><br><span class="line">  --llm <span class="string">&quot;<span class="variable">$MODEL_ROOT</span>/text_encoder/Qwen3-VL-8B-Instruct-UD-Q4_K_XL.gguf&quot;</span> \</span><br><span class="line">  --llm_vision <span class="string">&quot;<span class="variable">$MODEL_ROOT</span>/text_encoder/mmproj-Qwen3VL-8B-Instruct-F16.gguf&quot;</span> \</span><br><span class="line">  --vae <span class="string">&quot;<span class="variable">$MODEL_ROOT</span>/vae/qwen_image_2.1_vae_bf16.safetensors&quot;</span> \</span><br><span class="line">  --offload-to-cpu \</span><br><span class="line">  --max-vram cuda0=12 \</span><br><span class="line">  --cfg-scale 1.0 \</span><br><span class="line">  --steps 8 \</span><br><span class="line">  --sampling-method euler \</span><br><span class="line">  --sigmas qwen-image-2.1-turbo \</span><br><span class="line">  --ref-image-args <span class="string">&quot;preset=qwen&quot;</span> \</span><br><span class="line">  --strength 1 \</span><br><span class="line">  --log-level info</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>启动并验证：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">chmod</span> +x /mnt/data/ai-inference/scripts/run-qwen-image21-server.sh</span><br><span class="line">bash /mnt/data/ai-inference/scripts/run-qwen-image21-server.sh</span><br></pre></td></tr></table></figure>
+
+<p>另开一个终端：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ss -lntp | grep <span class="string">&#x27;:1234&#x27;</span></span><br><span class="line">curl -sS http://127.0.0.1:1234/v1/models | python -m json.tool</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>为什么要加 <code>--strength 1</code>：一开始编辑图片时，“把白衣服改成红色”可以成功，但“剪短头发”“添加人物”几乎没有效果。原因是当前版本的 <code>/v1/images/edits</code> 会走 img2img 流程（参考 <a target="_blank" rel="noopener" href="https://github.com/leejet/stable-diffusion.cpp/issues/1779">Issue #1779</a>），把默认 <code>--strength</code> 设为 <code>1</code> 可以绕过这个问题。升级引擎版本后需要重新验证是否还需要这个参数。</p>
+</li>
+<li><p>为什么只监听 <code>127.0.0.1</code>：<code>sd-server</code> 没有鉴权、排队和参数校验，不应直接对外开放。对外统一由后面的工作台和适配层提供服务。</p>
+</li>
+</ul>
+<h3 id="部署-Web-工作台"><a href="#部署-Web-工作台" class="headerlink" title="部署 Web 工作台"></a>部署 Web 工作台</h3><ul>
+<li><p>获取配套源码 <a target="_blank" rel="noopener" href="https://github.com/Garden12138/notes/tree/master/ai/code/qwen-image-2.1-turbo">qwen-image-2.1-turbo</a>，把其中的 <code>source/</code> 目录上传到服务器：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">scp -r ./source &lt;SSH_USER&gt;@&lt;SERVER_IP&gt;:/tmp/qwen-image-source</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>在服务器上安装依赖并执行安装脚本：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">conda activate qwen-image21</span><br><span class="line">python -m pip install -r /tmp/qwen-image-source/requirements.txt \</span><br><span class="line">  -i https://pypi.tuna.tsinghua.edu.cn/simple</span><br><span class="line"></span><br><span class="line">bash /tmp/qwen-image-source/install.sh</span><br></pre></td></tr></table></figure>
+
+<p><code>install.sh</code> 会做以下事情：</p>
+<ul>
+<li>检查 <code>sd-server</code> 是否已编译，未编译则退出。</li>
+<li>备份 <code>/mnt/data/ai-inference</code> 下已有的同名文件，再把 5 个服务文件复制过去。</li>
+<li>首次安装时生成随机 API Key，写入 <code>/mnt/data/ai-inference/.env.openai-image</code>（权限 600，不会在终端打印）；如果文件已存在则保留原 Key。</li>
+</ul>
+<blockquote>
+<p><code>install.sh</code> 是整理发布时新增的辅助脚本，只做过模拟安装测试。也可以对照 <code>source/</code> 的目录结构手动复制文件。</p>
+</blockquote>
+</li>
+<li><p>启动工作台：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">conda activate qwen-image21</span><br><span class="line">ENABLE_1024=0 python /mnt/data/ai-inference/scripts/qwen_image_gateway.py</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>代码中 <code>ENABLE_1024</code> 的默认值是开启，首次部署建议显式设为 <code>0</code>，只开放 768×768。</p>
+</blockquote>
+</li>
+<li><p>浏览器访问 <code>http://&lt;SERVER_IP&gt;:8000</code>。页面顶部显示模型服务在线，输入框底部可以选择输出尺寸、输出格式和三种模式：</p>
+<p><img src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="https://raw.githubusercontent.com/Garden12138/notes/master/ai/code/qwen-image-2.1-turbo/images/01-studio-mode-dropdown.png" alt="Web 工作台界面，输入框底部可切换文生图、整图编辑、局部涂抹编辑"></p>
+<p>如果页面返回 502，通常是 <code>sd-server</code> 没有启动或 <code>1234</code> 端口无法访问，工作台和 <code>sd-server</code> 两个进程缺一不可。</p>
+</li>
+</ul>
+<h4 id="文生图"><a href="#文生图" class="headerlink" title="文生图"></a>文生图</h4><ul>
+<li><p>选择“文生图”模式，输入提示词：</p>
+<blockquote>
+<p>夜晚灯光璀璨的城市河岸，一位25岁的虚构成年女性正面自然站立，黑色齐肩长发，身穿纯白色短袖T恤和深色牛仔裤，衣领、两只袖子和上衣轮廓清晰可见，双臂自然下垂，人物居中，城市夜景灯光与河面倒影，真实人像摄影，画面清晰。</p>
+</blockquote>
+<p><img src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="https://raw.githubusercontent.com/Garden12138/notes/master/ai/code/qwen-image-2.1-turbo/images/02-text-to-image-result.png" alt="文生图提交记录与生成结果"></p>
+</li>
+<li><p>生成的原图如下，后面的整图编辑和局部编辑都以这张图作为输入：</p>
+<p><img src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="https://raw.githubusercontent.com/Garden12138/notes/master/ai/code/qwen-image-2.1-turbo/images/test-original.png" alt="768×768 文生图原图"></p>
+</li>
+</ul>
+<h4 id="整图编辑"><a href="#整图编辑" class="headerlink" title="整图编辑"></a>整图编辑</h4><ul>
+<li><p>选择“整图编辑”模式，上传原图并输入修改指令。工作台内部调用 <code>POST /v1/images/edits</code>（<code>multipart/form-data</code>，上传图片和提示词）：</p>
+<blockquote>
+<p>只修改画面中央女性的服装，将白色短袖T恤完整替换为鲜红色短袖T恤，保留原有衣领、袖子、褶皱和上衣轮廓。保持人物面容、发型、姿势、身材比例以及城市河岸夜景不变，真实摄影风格。</p>
+</blockquote>
+<p><img src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="https://raw.githubusercontent.com/Garden12138/notes/master/ai/code/qwen-image-2.1-turbo/images/03-whole-image-edit-result.png" alt="整图编辑操作记录与结果"></p>
+<table>
+<thead>
+<tr>
+<th>编辑前</th>
+<th>编辑后</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><img src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="https://raw.githubusercontent.com/Garden12138/notes/master/ai/code/qwen-image-2.1-turbo/images/test-original.png" alt="编辑前"></td>
+<td><img src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="https://raw.githubusercontent.com/Garden12138/notes/master/ai/code/qwen-image-2.1-turbo/images/test-whole-edit.png" alt="整图编辑后，T 恤变为红色"></td>
+</tr>
+</tbody></table>
+</li>
+<li><p>使用经验：</p>
+<ul>
+<li>修改颜色比较容易成功；剪短头发、扎头发、更换服装款式等涉及结构变化的指令不稳定。</li>
+<li>整图编辑会重新生成整张图，背景和细节可能发生轻微变化，不是逐像素保留。</li>
+</ul>
+</li>
+</ul>
+<h4 id="局部涂抹编辑"><a href="#局部涂抹编辑" class="headerlink" title="局部涂抹编辑"></a>局部涂抹编辑</h4><ul>
+<li><p>选择“局部涂抹编辑”模式，上传原图后用画笔涂抹要修改的区域（页面上显示为半透明红色，只是标记，不影响结果颜色）。提交时网页会把涂抹区域转换为遮罩：<strong>白色表示修改，黑色表示保留</strong>。</p>
+</li>
+<li><p>涂抹覆盖 T 恤主体、衣领和袖子，输入：</p>
+<blockquote>
+<p>只修改遮罩覆盖的白色短袖T恤，将它替换为鲜明的宝蓝色棉质短袖T恤，保持衣领、袖子和衣服自然褶皱。保留未涂抹区域的脸部、头发、双臂以及夜景背景，真实摄影风格。</p>
+</blockquote>
+<p><img src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="https://raw.githubusercontent.com/Garden12138/notes/master/ai/code/qwen-image-2.1-turbo/images/04-mask-before-submit.png" alt="提交前，红色涂抹区域覆盖上衣"></p>
+<p><img src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="https://raw.githubusercontent.com/Garden12138/notes/master/ai/code/qwen-image-2.1-turbo/images/05-mask-edit-result.png" alt="局部编辑完成，生成蓝色上衣"></p>
+<table>
+<thead>
+<tr>
+<th>编辑前</th>
+<th>局部编辑后</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><img src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="https://raw.githubusercontent.com/Garden12138/notes/master/ai/code/qwen-image-2.1-turbo/images/test-original.png" alt="编辑前"></td>
+<td><img src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="https://raw.githubusercontent.com/Garden12138/notes/master/ai/code/qwen-image-2.1-turbo/images/test-masked-edit.png" alt="局部编辑后，T 恤变为蓝色"></td>
+</tr>
+</tbody></table>
+</li>
+<li><p>使用经验：</p>
+<ul>
+<li>遮罩只限定“允许修改的区域”，区域内画什么仍由模型决定，不是 Photoshop 式的精确替换。</li>
+<li>把长发改短发时，肩膀和胸前没涂到的发丝可能残留。解决办法是把涂抹范围扩大到所有需要重绘的位置。</li>
+</ul>
+</li>
+</ul>
+<h3 id="关于-1024×1024"><a href="#关于-1024×1024" class="headerlink" title="关于 1024×1024"></a>关于 1024×1024</h3><ul>
+<li><p>工作台支持 1024×1024，但这个尺寸曾导致整机卡死，至今没有稳定性验证，因此默认关闭。</p>
+</li>
+<li><p>1024×1024 的像素数约为 768×768 的 1.8 倍，<code>--max-vram</code> 和 CPU Offload 能降低显存占用，但无法消除显存和内存的峰值。</p>
+</li>
+<li><p>如果要测试：先停止其他 GPU 任务，每次只生成一张，并做好机器卡死后的恢复准备。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 开启 1024</span></span><br><span class="line">ENABLE_1024=1 python /mnt/data/ai-inference/scripts/qwen_image_gateway.py</span><br><span class="line"></span><br><span class="line"><span class="comment"># 查看当前允许的尺寸（allowed_sizes 字段）</span></span><br><span class="line">curl -fsS http://127.0.0.1:8000/health | python -m json.tool</span><br></pre></td></tr></table></figure></li>
+</ul>
+<h3 id="接入-OpenAI-Images-API（供-Agent-调用）"><a href="#接入-OpenAI-Images-API（供-Agent-调用）" class="headerlink" title="接入 OpenAI Images API（供 Agent 调用）"></a>接入 OpenAI Images API（供 Agent 调用）</h3><ul>
+<li><p>适配层把工作台包装成 OpenAI Images API 格式，其他程序可以像调用 OpenAI 图片接口一样使用：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Base URL : http://&lt;SERVER_IP&gt;:8001/v1</span><br><span class="line">API Key  : .env.openai-image 中的 IMAGE_API_KEY</span><br><span class="line">Model    : qwen-image-2.1-turbo</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>这里只兼容 <strong>Images API</strong>（<code>images.generate()</code> &#x2F; <code>images.edit()</code>），不是聊天模型接口，不能填到 Agent 的“聊天模型”配置里。Agent 需要支持 OpenAI Images API，或者通过自定义工具（Tool &#x2F; Function）调用。</p>
+</blockquote>
+</li>
+<li><p>查看 API Key（只在服务器本地查看，不要发到公开渠道）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">grep <span class="string">&#x27;^IMAGE_API_KEY=&#x27;</span> /mnt/data/ai-inference/.env.openai-image</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>确认 <code>sd-server</code> 和工作台已经启动后，启动适配层：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">conda activate qwen-image21</span><br><span class="line">bash /mnt/data/ai-inference/run-openai-compat.sh</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>支持的接口：</p>
+<table>
+<thead>
+<tr>
+<th>接口</th>
+<th>用途</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>GET /health</code></td>
+<td>健康检查</td>
+<td>不需要 Key</td>
+</tr>
+<tr>
+<td><code>GET /v1/models</code></td>
+<td>模型列表</td>
+<td>已实测</td>
+</tr>
+<tr>
+<td><code>POST /v1/images/generations</code></td>
+<td>文生图</td>
+<td>已实测</td>
+</tr>
+<tr>
+<td><code>POST /v1/images/edits</code></td>
+<td>整图编辑</td>
+<td>已实现，未在 8001 端口实测</td>
+</tr>
+<tr>
+<td><code>POST /v1/images/edits</code> + <code>mask</code></td>
+<td>局部遮罩编辑</td>
+<td>已实现，未在 8001 端口实测</td>
+</tr>
+<tr>
+<td><code>/v1/chat/completions</code>、<code>/v1/responses</code></td>
+<td>聊天</td>
+<td>不支持，返回 501</td>
+</tr>
+</tbody></table>
+<p>限制：<code>n</code> 只能为 <code>1</code>，只输出 PNG，结果以 Base64（<code>b64_json</code>）返回，不返回图片 URL，不支持异步任务。</p>
+</li>
+</ul>
+<h4 id="本机测试文生图"><a href="#本机测试文生图" class="headerlink" title="本机测试文生图"></a>本机测试文生图</h4><ul>
+<li><p>在服务器上执行：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">set</span> -a</span><br><span class="line"><span class="built_in">source</span> /mnt/data/ai-inference/.env.openai-image</span><br><span class="line"><span class="built_in">set</span> +a</span><br><span class="line"><span class="built_in">mkdir</span> -p ~/qwen-image-api-test &amp;&amp; <span class="built_in">cd</span> ~/qwen-image-api-test</span><br><span class="line"></span><br><span class="line">curl -sS --fail-with-body --max-time 660 \</span><br><span class="line">  -w <span class="string">&#x27;\nHTTP Status: %&#123;http_code&#125; | Total Time: %&#123;time_total&#125;s\n&#x27;</span> \</span><br><span class="line">  http://127.0.0.1:8001/v1/images/generations \</span><br><span class="line">  -H <span class="string">&quot;Authorization: Bearer <span class="variable">$IMAGE_API_KEY</span>&quot;</span> \</span><br><span class="line">  -H <span class="string">&#x27;Content-Type: application/json&#x27;</span> \</span><br><span class="line">  -d <span class="string">&#x27;&#123;</span></span><br><span class="line"><span class="string">    &quot;model&quot;: &quot;qwen-image-2.1-turbo&quot;,</span></span><br><span class="line"><span class="string">    &quot;prompt&quot;: &quot;A cute orange tabby cat sitting on a wooden windowsill, warm sunlight, green plants in the background, highly detailed fur, photorealistic photography.&quot;,</span></span><br><span class="line"><span class="string">    &quot;size&quot;: &quot;768x768&quot;,</span></span><br><span class="line"><span class="string">    &quot;n&quot;: 1,</span></span><br><span class="line"><span class="string">    &quot;output_format&quot;: &quot;png&quot;</span></span><br><span class="line"><span class="string">  &#125;&#x27;</span> \</span><br><span class="line">  -o api-response.json</span><br></pre></td></tr></table></figure>
+
+<p>输出 <code>HTTP Status: 200 | Total Time: 10.489501s</code>，耗时是 cURL 统计的整个请求时间：</p>
+<p><img src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="https://raw.githubusercontent.com/Garden12138/notes/master/ai/code/qwen-image-2.1-turbo/images/06-agent-api-success.png" alt="8001 接口本机调用返回 HTTP 200，终端账户信息已遮盖"></p>
+</li>
+<li><p>把返回结果中的 <code>data[0].b64_json</code> 解码成图片：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">python - &lt;&lt;<span class="string">&#x27;PY&#x27;</span></span><br><span class="line">from pathlib import Path</span><br><span class="line">import <span class="built_in">base64</span>, json</span><br><span class="line"></span><br><span class="line">response = json.loads(Path(<span class="string">&#x27;api-response.json&#x27;</span>).read_text())</span><br><span class="line">Path(<span class="string">&#x27;test-agent-api.png&#x27;</span>).write_bytes(base64.b64decode(response[<span class="string">&#x27;data&#x27;</span>][0][<span class="string">&#x27;b64_json&#x27;</span>]))</span><br><span class="line"><span class="built_in">print</span>(<span class="string">&#x27;Saved: test-agent-api.png&#x27;</span>)</span><br><span class="line">PY</span><br></pre></td></tr></table></figure>
+
+<p><img src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="https://raw.githubusercontent.com/Garden12138/notes/master/ai/code/qwen-image-2.1-turbo/images/test-agent-api.png" alt="通过 Images API 生成的 768×768 图片"></p>
+</li>
+</ul>
+<h4 id="使用-Python-SDK-调用"><a href="#使用-Python-SDK-调用" class="headerlink" title="使用 Python SDK 调用"></a>使用 Python SDK 调用</h4><ul>
+<li><p>在调用方机器上安装 OpenAI SDK 并设置环境变量：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">python -m pip install openai</span><br><span class="line"><span class="built_in">export</span> OPENAI_BASE_URL=<span class="string">&#x27;http://&lt;SERVER_IP&gt;:8001/v1&#x27;</span></span><br><span class="line"><span class="built_in">export</span> OPENAI_API_KEY=<span class="string">&#x27;&lt;IMAGE_API_KEY&gt;&#x27;</span></span><br></pre></td></tr></table></figure>
+</li>
+<li><p>文生图：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> base64</span><br><span class="line"><span class="keyword">import</span> os</span><br><span class="line"><span class="keyword">from</span> pathlib <span class="keyword">import</span> Path</span><br><span class="line"><span class="keyword">from</span> openai <span class="keyword">import</span> OpenAI</span><br><span class="line"></span><br><span class="line">client = OpenAI(</span><br><span class="line">    base_url=os.environ[<span class="string">&quot;OPENAI_BASE_URL&quot;</span>],</span><br><span class="line">    api_key=os.environ[<span class="string">&quot;OPENAI_API_KEY&quot;</span>],</span><br><span class="line">    timeout=<span class="number">660.0</span>,   <span class="comment"># 生成较慢，超时要设长一些</span></span><br><span class="line">    max_retries=<span class="number">0</span>,   <span class="comment"># 避免超时后 SDK 自动重复提交任务</span></span><br><span class="line">)</span><br><span class="line"></span><br><span class="line">result = client.images.generate(</span><br><span class="line">    model=<span class="string">&quot;qwen-image-2.1-turbo&quot;</span>,</span><br><span class="line">    prompt=<span class="string">&quot;一只橘猫在窗台上晒太阳，真实摄影风格&quot;</span>,</span><br><span class="line">    size=<span class="string">&quot;768x768&quot;</span>,</span><br><span class="line">    n=<span class="number">1</span>,</span><br><span class="line">)</span><br><span class="line">Path(<span class="string">&quot;cat.png&quot;</span>).write_bytes(base64.b64decode(result.data[<span class="number">0</span>].b64_json))</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>图片编辑和局部编辑（需要局部编辑时再传 <code>mask</code>）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">with</span> <span class="built_in">open</span>(<span class="string">&quot;reference.png&quot;</span>, <span class="string">&quot;rb&quot;</span>) <span class="keyword">as</span> image, <span class="built_in">open</span>(<span class="string">&quot;mask.png&quot;</span>, <span class="string">&quot;rb&quot;</span>) <span class="keyword">as</span> mask:</span><br><span class="line">    result = client.images.edit(</span><br><span class="line">        model=<span class="string">&quot;qwen-image-2.1-turbo&quot;</span>,</span><br><span class="line">        image=image,</span><br><span class="line">        mask=mask,</span><br><span class="line">        prompt=<span class="string">&quot;将白色上衣换成黑色短袖 T 恤，保持人物面容和背景不变&quot;</span>,</span><br><span class="line">        size=<span class="string">&quot;768x768&quot;</span>,</span><br><span class="line">    )</span><br><span class="line">Path(<span class="string">&quot;edited.png&quot;</span>).write_bytes(base64.b64decode(result.data[<span class="number">0</span>].b64_json))</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>遮罩规则要注意：</p>
+<table>
+<thead>
+<tr>
+<th>遮罩格式</th>
+<th>修改区域</th>
+<th>保留区域</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>RGBA PNG（OpenAI 约定）</td>
+<td>透明像素</td>
+<td>不透明像素</td>
+</tr>
+<tr>
+<td>灰度 &#x2F; RGB 图片（工作台约定）</td>
+<td>白色</td>
+<td>黑色</td>
+</tr>
+</tbody></table>
+<p>适配层会自动把 OpenAI 的“透明&#x3D;修改”转换成工作台的“白色&#x3D;修改”。遮罩必须与原图宽高一致，否则返回 400，不会自动缩放。</p>
+</li>
+</ul>
+<h4 id="Agent-配置建议"><a href="#Agent-配置建议" class="headerlink" title="Agent 配置建议"></a>Agent 配置建议</h4><table>
+<thead>
+<tr>
+<th>配置项</th>
+<th>建议值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Base URL</td>
+<td><code>http://&lt;SERVER_IP&gt;:8001/v1</code></td>
+</tr>
+<tr>
+<td>Model</td>
+<td><code>qwen-image-2.1-turbo</code></td>
+</tr>
+<tr>
+<td>Size</td>
+<td><code>768x768</code>（<code>/health</code> 返回的 <code>allowed_sizes</code> 包含 1024 时才使用 1024）</td>
+</tr>
+<tr>
+<td>Timeout</td>
+<td>不低于 660 秒</td>
+</tr>
+<tr>
+<td>Max retries</td>
+<td><code>0</code>，由 Agent 按错误码决定是否重试</td>
+</tr>
+<tr>
+<td>并发</td>
+<td>同一时间只提交一个任务</td>
+</tr>
+</tbody></table>
+<ul>
+<li><p>常见错误码：</p>
+<table>
+<thead>
+<tr>
+<th>状态码</th>
+<th>原因</th>
+<th>处理方式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>400</code></td>
+<td>参数、尺寸不支持，遮罩尺寸不一致，<code>n</code> 不为 1</td>
+<td>修正请求</td>
+</tr>
+<tr>
+<td><code>401</code></td>
+<td>API Key 缺失或错误</td>
+<td>检查 <code>Authorization: Bearer ...</code></td>
+</tr>
+<tr>
+<td><code>413</code> &#x2F; <code>415</code></td>
+<td>图片超过 20 MiB，或不是 PNG&#x2F;JPEG&#x2F;WebP</td>
+<td>压缩或转换格式</td>
+</tr>
+<tr>
+<td><code>429</code></td>
+<td>排队已满（1 个执行中 + 最多 2 个等待）</td>
+<td>等待 5～15 秒后重试</td>
+</tr>
+<tr>
+<td><code>501</code></td>
+<td>调用了聊天接口</td>
+<td>改用 Images API</td>
+</tr>
+<tr>
+<td><code>502</code> &#x2F; <code>503</code></td>
+<td>工作台未启动或未就绪</td>
+<td>检查 8000 服务和 <code>/health</code></td>
+</tr>
+<tr>
+<td><code>504</code></td>
+<td>推理超时</td>
+<td>先确认原任务是否还在执行，不要立即重复提交</td>
+</tr>
+</tbody></table>
+<p>完整的对接说明见 <a target="_blank" rel="noopener" href="https://github.com/Garden12138/notes/blob/master/ai/code/qwen-image-2.1-turbo/docs/AGENT_INTEGRATION.md">AGENT_INTEGRATION.md</a>。</p>
+</li>
+</ul>
+<h3 id="日常启动与检查"><a href="#日常启动与检查" class="headerlink" title="日常启动与检查"></a>日常启动与检查</h3><ul>
+<li><p>服务器重启后，需要按顺序在三个终端中重新启动服务：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 终端 1：模型推理</span></span><br><span class="line">conda activate qwen-image21</span><br><span class="line">bash /mnt/data/ai-inference/scripts/run-qwen-image21-server.sh</span><br><span class="line"></span><br><span class="line"><span class="comment"># 终端 2：Web 工作台</span></span><br><span class="line">conda activate qwen-image21</span><br><span class="line">ENABLE_1024=0 python /mnt/data/ai-inference/scripts/qwen_image_gateway.py</span><br><span class="line"></span><br><span class="line"><span class="comment"># 终端 3：Images API 适配层</span></span><br><span class="line">conda activate qwen-image21</span><br><span class="line">bash /mnt/data/ai-inference/run-openai-compat.sh</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>检查端口、资源和服务状态：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">ss -lntp | grep -E <span class="string">&#x27;:1234|:8000|:8001&#x27;</span></span><br><span class="line">nvidia-smi</span><br><span class="line">free -h</span><br><span class="line">curl -fsS http://127.0.0.1:8000/health | python -m json.tool</span><br><span class="line">curl -fsS http://127.0.0.1:8001/health | python -m json.tool</span><br></pre></td></tr></table></figure></li>
+</ul>
+<h3 id="常见问题"><a href="#常见问题" class="headerlink" title="常见问题"></a>常见问题</h3><table>
+<thead>
+<tr>
+<th>现象</th>
+<th>原因</th>
+<th>处理方式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>编译报 <code>._add-id.cu</code></td>
+<td>Mac 打包带上了 <code>._*</code> 元数据文件</td>
+<td>清理 <code>._*</code> 后重新编译</td>
+</tr>
+<tr>
+<td>命令行能生图，网页返回 502</td>
+<td><code>sd-server</code> 未启动，或 <code>1234</code> 端口不可访问</td>
+<td>启动 <code>sd-server</code> 并检查端口</td>
+</tr>
+<tr>
+<td>局域网打不开网页</td>
+<td>工作台未启动，或防火墙拦截 8000 端口</td>
+<td>检查进程和防火墙</td>
+</tr>
+<tr>
+<td>编辑图片几乎没有变化</td>
+<td>缺少 <code>--llm_vision</code>、<code>preset=qwen</code> 或 <code>--strength 1</code></td>
+<td>对照本文的 <code>sd-server</code> 启动参数</td>
+</tr>
+<tr>
+<td>改发型后残留发丝</td>
+<td>遮罩没有覆盖全部需要重绘的区域</td>
+<td>扩大涂抹范围</td>
+</tr>
+<tr>
+<td>1024×1024 卡死</td>
+<td>显存或内存峰值过高</td>
+<td>回退到 768，停止其他 GPU 任务</td>
+</tr>
+<tr>
+<td>启动适配层提示 <code>Run apply.sh first</code></td>
+<td><code>.env.openai-image</code> 不存在</td>
+<td>执行 <code>install.sh</code> 生成配置</td>
+</tr>
+<tr>
+<td>Agent 配置了 OpenAI 却不出图</td>
+<td>Agent 只调用了聊天接口</td>
+<td>确认 Agent 调用的是 Images API</td>
+</tr>
+</tbody></table>
+<h3 id="安全注意事项"><a href="#安全注意事项" class="headerlink" title="安全注意事项"></a>安全注意事项</h3><ul>
+<li><code>1234</code> 只监听本机，不要对外开放。</li>
+<li><code>8000</code> 工作台不鉴权。即使 <code>8001</code> 设置了 API Key，能直接访问 <code>8000</code> 也等于绕过了鉴权，只能在可信局域网中使用。</li>
+<li>跨网段或公网访问时，需要通过防火墙限制来源 IP，并使用 HTTPS 或 VPN。</li>
+<li><code>.env.openai-image</code>、模型文件、日志不要提交到 Git；API Key 不要写进前端页面或 Agent 的提示词。</li>
+</ul>
+<h3 id="验证情况"><a href="#验证情况" class="headerlink" title="验证情况"></a>验证情况</h3><table>
+<thead>
+<tr>
+<th>能力</th>
+<th>状态</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>768×768 文生图、整图编辑、局部涂抹编辑（Web 工作台）</td>
+<td>已验证</td>
+</tr>
+<tr>
+<td>服务器本机调用 8001 的 <code>/v1/models</code>、<code>/v1/images/generations</code></td>
+<td>已验证</td>
+</tr>
+<tr>
+<td>8001 的整图编辑、遮罩编辑</td>
+<td>已实现，未实测</td>
+</tr>
+<tr>
+<td>其他机器上的 Agent 通过局域网调用 8001</td>
+<td>未实测</td>
+</tr>
+<tr>
+<td>1024×1024 稳定运行</td>
+<td>未验证，曾出现卡死</td>
+</tr>
+<tr>
+<td><code>install.sh</code> 在 GPU 服务器上完整安装</td>
+<td>未实测，仅模拟测试</td>
+</tr>
+</tbody></table>
+<h3 id="配套文件"><a href="#配套文件" class="headerlink" title="配套文件"></a>配套文件</h3><ul>
+<li><p>配套目录 <a target="_blank" rel="noopener" href="https://github.com/Garden12138/notes/tree/master/ai/code/qwen-image-2.1-turbo">qwen-image-2.1-turbo</a> 包含服务器上实际运行的源码（未包含模型权重和 stable-diffusion.cpp）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">qwen-image-2.1-turbo/</span><br><span class="line">├── source/</span><br><span class="line">│   ├── scripts/</span><br><span class="line">│   │   ├── run-qwen-image21-server.sh   # sd-server 启动脚本</span><br><span class="line">│   │   ├── qwen_image_gateway.py        # Web 工作台（FastAPI）</span><br><span class="line">│   │   └── openai_compat_gateway.py     # OpenAI Images API 适配层</span><br><span class="line">│   ├── web/index.html                   # 工作台网页</span><br><span class="line">│   ├── run-openai-compat.sh             # 适配层启动脚本</span><br><span class="line">│   ├── requirements.txt                 # Python 依赖</span><br><span class="line">│   ├── install.sh                       # 安装脚本</span><br><span class="line">│   ├── examples/openai_sdk_example.py   # SDK 调用示例</span><br><span class="line">│   └── tests/test_adapter.py            # 适配层离线测试</span><br><span class="line">├── docs/AGENT_INTEGRATION.md            # Agent 对接说明</span><br><span class="line">└── images/                              # 本文截图</span><br></pre></td></tr></table></figure></li>
+</ul>
+<h3 id="参考文献"><a href="#参考文献" class="headerlink" title="参考文献"></a>参考文献</h3><ul>
+<li><a target="_blank" rel="noopener" href="https://huggingface.co/Qwen/Qwen-Image-2.1">Qwen-Image-2.1 官方模型</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.modelscope.cn/models/unsloth/Qwen-Image-2.1-Turbo-GGUF">ModelScope：Qwen-Image-2.1-Turbo-GGUF</a></li>
+<li><a target="_blank" rel="noopener" href="https://huggingface.co/unsloth/Qwen3-VL-8B-Instruct-GGUF">Qwen3-VL-8B-Instruct-GGUF</a></li>
+<li><a target="_blank" rel="noopener" href="https://huggingface.co/Comfy-Org/Qwen-Image-2.1/blob/main/vae/qwen_image_2.1_vae_bf16.safetensors">Qwen-Image-2.1 VAE</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/leejet/stable-diffusion.cpp">stable-diffusion.cpp</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/leejet/stable-diffusion.cpp/blob/master/docs/build.md">stable-diffusion.cpp 编译文档</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/leejet/stable-diffusion.cpp/blob/master/docs/qwen_image_2.1.md">stable-diffusion.cpp Qwen Image 2.1 使用文档</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/leejet/stable-diffusion.cpp/blob/master/examples/server/api.md">stable-diffusion.cpp Server API</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/leejet/stable-diffusion.cpp/issues/1779">Issue #1779：&#x2F;v1&#x2F;images&#x2F;edits always forces img2img</a></li>
+</ul>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://gardenqaq.cn">Garden</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://gardenqaq.cn/2026/11/23/Deploying-Qwen-Image-2.1-Turbo-on-a-single-RTX-2080-Ti/">https://gardenqaq.cn/2026/11/23/Deploying-Qwen-Image-2.1-Turbo-on-a-single-RTX-2080-Ti/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://gardenqaq.cn" target="_blank">Garden Blog</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/ai/">ai</a></div><div class="post-share"><div class="social-share" data-image="/img/post_covers/saber-20261123.jpg" data-sites="facebook,twitter,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related full-width" href="/2026/03/12/LobeHub-Tutorial/" title="LobeHub Tutorial.md"><img class="cover" src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/img/post_covers/Gemini_Generated_Image_r11qvxr11qvxr11q.png" onerror="onerror=null;src='/img/404.jpg'" alt="cover of previous post"><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">LobeHub Tutorial.md</div></div><div class="info-2"><div class="info-item-1">LobeHub 上手教程：通过 docker-compose 一键部署 LobeHub（含 Casdoor 与 MinIO），并演示基础功能使用，包括配置模型 API Key、创建知识库、AI 对话、生图生成以及内置/自定义助手的添加与使用。</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2025/11/03/AI-video-face-swapping-implementation-methods/" title="AI video face-swapping implementation methods.md"><img class="cover" src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/img/post_covers/Google_AI_Studio_2025-11-03T06_39_30.260Z.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-11-03</div><div class="info-item-2">AI video face-swapping implementation methods.md</div></div><div class="info-2"><div class="info-item-1">调研基于 Wan2.2-Animate 的视频换脸实现方式，覆盖 HuggingFace、ModelScope、Wan 平台、ComfyUI（在线/本地）流程、优缺点与关键模型配置。</div></div></div></a><a class="pagination-related" href="/2025/10/16/Business-license-OCR-implementation/" title="Business license OCR implementation"><img class="cover" src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/img/post_covers/ChatGPT_Image_20251016.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-10-16</div><div class="info-item-2">Business license OCR implementation</div></div><div class="info-2"><div class="info-item-1">基于FastAPI框架实现营业执照OCR识别系统，集成读光票证检测矫正模型和Nanonets-OCR-s模型，自动识别营业执照中的统一社会信用代码、名称、法定代表人、住所等关键信息。</div></div></div></a><a class="pagination-related" href="/2025/10/15/BPE-algorithm-analysis/" title="BPE algorithm analysis"><img class="cover" src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/img/post_covers/ChatGPT_Image_20251015.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-10-15</div><div class="info-item-2">BPE algorithm analysis</div></div><div class="info-2"><div class="info-item-1">深入解析BPE（Byte Pair Encoding）算法的工作原理，包括训练流程和应用流程，通过迭代合并高频字符对来构建词汇表，有效解决NLP中的罕见词问题。</div></div></div></a><a class="pagination-related" href="/2025/06/30/DB-GPT-usage/" title="DB-GPT usage"><img class="cover" src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/img/post_covers/133049767_p2.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-06-30</div><div class="info-item-2">DB-GPT usage</div></div><div class="info-2"><div class="info-item-1">DB-GPT是一个开源的AI原生数据应用开发框架，目的是构建大模型领域的基础设施，通过开发多模型管理(SMMF)、Text2SQL效果优化、RAG框架以及优化、Multi-Agents框架协作、AWEL(智能体工作流编排)等多种技术能力，让围绕数据库构建大模型应用更简单，更方便。</div></div></div></a><a class="pagination-related" href="/2026/01/29/Deploying-Step3-VL-10B-using-vLLM-multi-GPU-inference/" title="Deploying Step3-VL-10B using vLLM multi-GPU inference"><img class="cover" src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/img/post_covers/Gemini_Generated_Image_v8zw8jv8zw8jv8zw.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-01-29</div><div class="info-item-2">Deploying Step3-VL-10B using vLLM multi-GPU inference</div></div><div class="info-2"><div class="info-item-1">介绍在 Ubuntu 22.04 + 多张 22GB GPU 服务器上，通过 vLLM OpenAI API Server 部署 Step3-VL-10B 模型的完整流程，包括 NVIDIA 驱动与 CUDA 配置、Docker GPU 环境搭建、ModelScope 模型缓存、vLLM 多卡 Tensor Parallel 启动参数以及接入 dify 工作流的实战案例。</div></div></div></a><a class="pagination-related" href="/2025/07/15/Download-model/" title="Download model"><img class="cover" src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/img/post_covers/133049767_p1.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-07-15</div><div class="info-item-2">Download model</div></div><div class="info-2"><div class="info-item-1">下载模型，使开发者可在本地环境微调或运行推理模型。</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/img/saber.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">Garden</div><div class="author-info-description"></div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">38</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">16</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">0</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/Garden12138"><i class="fab fa-github"></i><span>Follow Me</span></a></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">This is Garden's Blog</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8%E5%8D%95%E5%BC%A0-RTX-2080-Ti-%E9%83%A8%E7%BD%B2-Qwen-Image-2-1-Turbo-%E6%9C%AC%E5%9C%B0%E7%94%9F%E5%9B%BE%E6%9C%8D%E5%8A%A1"><span class="toc-number">1.</span> <span class="toc-text">使用单张 RTX 2080 Ti 部署 Qwen-Image-2.1-Turbo 本地生图服务</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%9B%AE%E6%A0%87"><span class="toc-number">1.1.</span> <span class="toc-text">目标</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%96%B9%E6%A1%88%E8%AF%B4%E6%98%8E"><span class="toc-number">1.2.</span> <span class="toc-text">方案说明</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%8E%AF%E5%A2%83"><span class="toc-number">1.3.</span> <span class="toc-text">环境</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%87%86%E5%A4%87%E7%9B%AE%E5%BD%95%E5%92%8C-Python-%E7%8E%AF%E5%A2%83"><span class="toc-number">1.4.</span> <span class="toc-text">准备目录和 Python 环境</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BC%96%E8%AF%91-stable-diffusion-cpp"><span class="toc-number">1.5.</span> <span class="toc-text">编译 stable-diffusion.cpp</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%8B%E8%BD%BD%E6%A8%A1%E5%9E%8B"><span class="toc-number">1.6.</span> <span class="toc-text">下载模型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8%E5%91%BD%E4%BB%A4%E8%A1%8C%E6%B5%8B%E8%AF%95%E7%94%9F%E5%9B%BE"><span class="toc-number">1.7.</span> <span class="toc-text">使用命令行测试生图</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%90%AF%E5%8A%A8-sd-server"><span class="toc-number">1.8.</span> <span class="toc-text">启动 sd-server</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%83%A8%E7%BD%B2-Web-%E5%B7%A5%E4%BD%9C%E5%8F%B0"><span class="toc-number">1.9.</span> <span class="toc-text">部署 Web 工作台</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%96%87%E7%94%9F%E5%9B%BE"><span class="toc-number">1.9.1.</span> <span class="toc-text">文生图</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%95%B4%E5%9B%BE%E7%BC%96%E8%BE%91"><span class="toc-number">1.9.2.</span> <span class="toc-text">整图编辑</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%B1%80%E9%83%A8%E6%B6%82%E6%8A%B9%E7%BC%96%E8%BE%91"><span class="toc-number">1.9.3.</span> <span class="toc-text">局部涂抹编辑</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E4%BA%8E-1024%C3%971024"><span class="toc-number">1.10.</span> <span class="toc-text">关于 1024×1024</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8E%A5%E5%85%A5-OpenAI-Images-API%EF%BC%88%E4%BE%9B-Agent-%E8%B0%83%E7%94%A8%EF%BC%89"><span class="toc-number">1.11.</span> <span class="toc-text">接入 OpenAI Images API（供 Agent 调用）</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%9C%AC%E6%9C%BA%E6%B5%8B%E8%AF%95%E6%96%87%E7%94%9F%E5%9B%BE"><span class="toc-number">1.11.1.</span> <span class="toc-text">本机测试文生图</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8-Python-SDK-%E8%B0%83%E7%94%A8"><span class="toc-number">1.11.2.</span> <span class="toc-text">使用 Python SDK 调用</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Agent-%E9%85%8D%E7%BD%AE%E5%BB%BA%E8%AE%AE"><span class="toc-number">1.11.3.</span> <span class="toc-text">Agent 配置建议</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%97%A5%E5%B8%B8%E5%90%AF%E5%8A%A8%E4%B8%8E%E6%A3%80%E6%9F%A5"><span class="toc-number">1.12.</span> <span class="toc-text">日常启动与检查</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98"><span class="toc-number">1.13.</span> <span class="toc-text">常见问题</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%AE%89%E5%85%A8%E6%B3%A8%E6%84%8F%E4%BA%8B%E9%A1%B9"><span class="toc-number">1.14.</span> <span class="toc-text">安全注意事项</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%AA%8C%E8%AF%81%E6%83%85%E5%86%B5"><span class="toc-number">1.15.</span> <span class="toc-text">验证情况</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%85%8D%E5%A5%97%E6%96%87%E4%BB%B6"><span class="toc-number">1.16.</span> <span class="toc-text">配套文件</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8F%82%E8%80%83%E6%96%87%E7%8C%AE"><span class="toc-number">1.17.</span> <span class="toc-text">参考文献</span></a></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/2026/11/23/Deploying-Qwen-Image-2.1-Turbo-on-a-single-RTX-2080-Ti/" title="Deploying Qwen-Image-2.1-Turbo on a single RTX 2080 Ti"><img src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/img/post_covers/saber-20261123.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Deploying Qwen-Image-2.1-Turbo on a single RTX 2080 Ti"/></a><div class="content"><a class="title" href="/2026/11/23/Deploying-Qwen-Image-2.1-Turbo-on-a-single-RTX-2080-Ti/" title="Deploying Qwen-Image-2.1-Turbo on a single RTX 2080 Ti">Deploying Qwen-Image-2.1-Turbo on a single RTX 2080 Ti</a><time datetime="2026-11-23T08:40:00.000Z" title="发表于 2026-11-23 16:40:00">2026-11-23</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/03/12/LobeHub-Tutorial/" title="LobeHub Tutorial.md"><img src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/img/post_covers/Gemini_Generated_Image_r11qvxr11qvxr11q.png" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="LobeHub Tutorial.md"/></a><div class="content"><a class="title" href="/2026/03/12/LobeHub-Tutorial/" title="LobeHub Tutorial.md">LobeHub Tutorial.md</a><time datetime="2026-03-12T07:26:38.000Z" title="发表于 2026-03-12 15:26:38">2026-03-12</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/03/02/Implementing-an-AI-Personal-Assistant-using-NanoBot-and-OpenIM/" title="Implementing an AI Personal Assistant using NanoBot and OpenIM"><img src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/img/post_covers/Gemini_Generated_Image_hkvx3chkvx3chkvx.png" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Implementing an AI Personal Assistant using NanoBot and OpenIM"/></a><div class="content"><a class="title" href="/2026/03/02/Implementing-an-AI-Personal-Assistant-using-NanoBot-and-OpenIM/" title="Implementing an AI Personal Assistant using NanoBot and OpenIM">Implementing an AI Personal Assistant using NanoBot and OpenIM</a><time datetime="2026-03-02T08:19:03.000Z" title="发表于 2026-03-02 16:19:03">2026-03-02</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/02/12/Using-vLLM-deploy-GLM-OCR/" title="Using vLLM deploy GLM OCR"><img src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/img/post_covers/Gemini_Generated_Image_nc24q6nc24q6nc24.png" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Using vLLM deploy GLM OCR"/></a><div class="content"><a class="title" href="/2026/02/12/Using-vLLM-deploy-GLM-OCR/" title="Using vLLM deploy GLM OCR">Using vLLM deploy GLM OCR</a><time datetime="2026-02-12T07:36:22.000Z" title="发表于 2026-02-12 15:36:22">2026-02-12</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/02/10/Using-the-dify-subworkflow/" title="Using the dify subworkflow"><img src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/img/post_covers/Gemini_Generated_Image_23xz5423xz5423xz.png" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Using the dify subworkflow"/></a><div class="content"><a class="title" href="/2026/02/10/Using-the-dify-subworkflow/" title="Using the dify subworkflow">Using the dify subworkflow</a><time datetime="2026-02-10T02:28:15.000Z" title="发表于 2026-02-10 10:28:15">2026-02-10</time></div></div></div></div></div></div></main><footer id="footer" style="background-image: url(/img/post_covers/saber-20261123.jpg);"><div id="footer-wrap"><div class="copyright">&copy;2019 - 2026 By Garden</div><div class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 7.3.0</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.3.5</a></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js"></script><script src="/js/main.js"></script><script src="https://cdn.jsdelivr.net/npm/instant.page/instantpage.min.js" type="module"></script><script src="https://cdn.jsdelivr.net/npm/vanilla-lazyload/dist/lazyload.iife.min.js"></script><div class="js-pjax"></div><canvas class="fireworks" mobile="false"></canvas><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/fireworks.min.js"></script><script defer="defer" id="fluttering_ribbon" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/canvas-fluttering-ribbon.min.js"></script><script id="canvas_nest" defer="defer" color="0,0,255" opacity="0.7" zIndex="-1" count="99" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/canvas-nest.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/activate-power-mode.min.js"></script><script>POWERMODE.colorful = true;
+POWERMODE.shake = true;
+POWERMODE.mobile = false;
+document.body.addEventListener('input', POWERMODE);
+</script><script id="click-heart" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/click-heart.min.js" async="async" mobile="false"></script><script id="click-show-text" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/click-show-text.min.js" data-mobile="false" data-text="I,LOVE,YOU" data-fontsize="15px" data-random="false" async="async"></script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>
